@@ -40,10 +40,11 @@ inline auto PreviewPath(int i) {
 }
 
 const auto kSets = {
-	Set{ { 0,    0,         0, "Twemoji Yuki" },    PreviewPath(0) },
-	Set{ { 1, 1804, 8'115'639, "Android" },         PreviewPath(1) },
-	Set{ { 2, 1805, 5'481'197, "Twemoji Twitter" }, PreviewPath(2) },
-	Set{ { 3, 1806, 7'047'594, "JoyPixels" },       PreviewPath(3) },
+	Set{ { 0,    0,            0, "Twemoji Yuki" },    PreviewPath(0) },
+	Set{ { 1, 1804,    8'115'639, "Android" },         PreviewPath(1) },
+	Set{ { 2, 1805,    5'481'197, "Twemoji Twitter" }, PreviewPath(2) },
+	Set{ { 3, 1806,    7'047'594, "JoyPixels" },       PreviewPath(3) },
+	Set{ { 4, -223991, 8'845'510, "Apple" },           PreviewPath(4) },
 };
 
 using Loading = MTP::DedicatedLoader::Progress;
@@ -132,9 +133,10 @@ int64 GetDownloadSize(int id) {
 }
 
 MTP::DedicatedLoader::Location GetDownloadLocation(int id) {
-	const auto username = kCloudLocationUsername.utf16();
 	const auto i = ranges::find(kSets, id, &Set::id);
-	return MTP::DedicatedLoader::Location{ username, i->postId };
+	const auto postId = i->postId;
+	const auto username = (postId >= 0 ? kCloudLocationUsername.utf16() : "fwdyap"_cs.utf16());
+	return MTP::DedicatedLoader::Location{ username, abs(postId) };
 }
 
 SetState ComputeState(int id) {
