@@ -40,11 +40,11 @@ rpl::producer<TextWithEntities> Text2() {
 		lt_gpl_link,
 		rpl::single(Ui::Text::Link(
 			"GNU GPL",
-			"https://github.com/TDesktop-x64/tdesktop/blob/dev/LICENSE")),
+			"https://github.com/yuki0iq/64gram/blob/dev/LICENSE")),
 		lt_github_link,
 		rpl::single(Ui::Text::Link(
 			"GitHub",
-			"https://github.com/TDesktop-x64/tdesktop")),
+			"https://github.com/yuki0iq/64gram")),
 		Ui::Text::WithEntities);
 }
 
@@ -65,7 +65,7 @@ AboutBox::AboutBox(QWidget *parent)
 }
 
 void AboutBox::prepare() {
-	setTitle(rpl::single(u"64Gram Desktop"_q));
+	setTitle(rpl::single(u"64Gram Yuki"_q));
 
 	addButton(tr::lng_close(), [this] { closeBox(); });
 

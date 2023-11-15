@@ -573,8 +573,8 @@ MainMenu::MainMenu(
 	parentResized();
 
 	_telegram->setMarkedText(Ui::Text::Link(
-		u"64Gram Desktop"_q,
-		u"https://github.com/TDesktop-x64/tdesktop"_q));
+		u"64Gram Yuki"_q,
+		u"https://github.com/yuki0iq/64gram"_q));
 	_telegram->setLinksTrusted();
 	_version->setMarkedText(
 		Ui::Text::Link(
