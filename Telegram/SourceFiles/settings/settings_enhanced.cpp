@@ -163,6 +163,23 @@ namespace Settings {
 			Core::Restart();
 		}, container->lifetime());
 
+		auto AnimojiBtn = AddButton(
+				inner,
+				tr::lng_settings_no_animoji(),
+				st::settingsButtonNoIcon
+		);
+		AnimojiBtn->setColorOverride(QColor(255, 0, 0));
+		AnimojiBtn->toggleOn(
+				rpl::single(GetEnhancedBool("no_animoji"))
+		)->toggledChanges(
+		) | rpl::filter([=](bool toggled) {
+			return (toggled != GetEnhancedBool("no_animoji"));
+		}) | rpl::start_with_next([=](bool toggled) {
+			SetEnhancedValue("no_animoji", toggled);
+			EnhancedSettings::Write();
+			Core::Restart();
+		}, container->lifetime());
+
 		AddButton(
 				inner,
 				tr::lng_settings_show_repeater_option(),

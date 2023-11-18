@@ -4592,3 +4592,5 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 "lng_blocked_user_hint" = "[Blocked User Message]\n";
 // Keys finished
+
+"lng_settings_no_animoji" = "Disable animated big emoji";
