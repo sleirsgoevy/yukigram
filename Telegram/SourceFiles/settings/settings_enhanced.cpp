@@ -182,6 +182,20 @@ namespace Settings {
 
 		AddButton(
 				inner,
+				tr::lng_settings_old_reply_layout(),
+				st::settingsButtonNoIcon
+		)->toggleOn(
+				rpl::single(GetEnhancedBool("old_reply_layout"))
+		)->toggledChanges(
+		) | rpl::filter([=](bool toggled) {
+			return (toggled != GetEnhancedBool("old_reply_layout"));
+		}) | rpl::start_with_next([=](bool toggled) {
+			SetEnhancedValue("old_reply_layout", toggled);
+			EnhancedSettings::Write();
+		}, container->lifetime());
+
+		AddButton(
+				inner,
 				tr::lng_settings_show_repeater_option(),
 				st::settingsButtonNoIcon
 		)->toggleOn(

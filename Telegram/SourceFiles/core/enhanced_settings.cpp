@@ -323,6 +323,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("translate_to_tc"), false);
 		settings.insert(qsl("hide_stories"), false);
 		settings.insert(qsl("no_animoji"), false);
+		settings.insert(qsl("old_reply_layout"), false);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -374,6 +375,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("translate_to_tc"), GetEnhancedBool("translate_to_tc"));
 		settings.insert(qsl("hide_stories"), GetEnhancedBool("hide_stories"));
 		settings.insert(qsl("no_animoji"), GetEnhancedBool("no_animoji"));
+		settings.insert(qsl("old_reply_layout"), GetEnhancedBool("old_reply_layout"));
 
 		auto document = QJsonDocument();
 		document.setObject(settings);

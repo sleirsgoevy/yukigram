@@ -215,17 +215,27 @@ UnwrappedMedia::SurroundingInfo UnwrappedMedia::surroundingInfo(
 		panelHeight += st::msgServiceNameFont->height
 			+ (reply ? st::msgReplyPadding.top() : 0);
 	}
-	if (panelHeight) {
-		panelHeight += st::msgReplyPadding.top();
-	}
-	if (reply) {
-		const auto replyMargins = reply->margins();
-		panelHeight += reply->height()
-			- ((forwarded || via) ? 0 : replyMargins.top())
-			- replyMargins.bottom();
+	if (GetEnhancedBool("old_reply_layout")) {
+		if (reply) {
+			panelHeight += reply->height();
+		}
+		if (panelHeight) {
+			panelHeight += st::msgReplyPadding.top() + st::msgReplyPadding.bottom();
+		}
 	} else {
-		panelHeight += st::msgReplyPadding.bottom();
+		if (panelHeight) {
+			panelHeight += st::msgReplyPadding.top();
+		}
+		if (reply) {
+			const auto replyMargins = reply->margins();
+			panelHeight += reply->height()
+					- ((forwarded || via) ? 0 : replyMargins.top())
+					- replyMargins.bottom();
+		} else {
+			panelHeight += st::msgReplyPadding.bottom();
+		}
 	}
+
 	const auto total = (topicSize.isEmpty() ? 0 : topicSize.height())
 		+ ((panelHeight || !topicSize.height()) ? st::topicButtonSkip : 0)
 		+ panelHeight;
@@ -332,13 +342,22 @@ void UnwrappedMedia::drawSurrounding(
 				recty += skip;
 			}
 			if (reply) {
-				if (forwarded || via) {
+				if (GetEnhancedBool("old_reply_layout")) {
 					recty += st::msgReplyPadding.top();
-					recth -= st::msgReplyPadding.top();
+					rectx += st::msgReplyPadding.left();
+					if (forwarded || via) {
+						recth -= st::msgReplyPadding.top();
+					}
+					reply->paint(p, _parent, context, rectx, recty, textw, false);
 				} else {
-					recty -= reply->margins().top();
+					if (forwarded || via) {
+						recty += st::msgReplyPadding.top();
+						recth -= st::msgReplyPadding.top();
+					} else {
+						recty -= reply->margins().top();
+					}
+					reply->paint(p, _parent, context, rectx, recty, rectw, false);
 				}
-				reply->paint(p, _parent, context, rectx, recty, rectw, false);
 			}
 			replyRight = rectx + rectw;
 		}

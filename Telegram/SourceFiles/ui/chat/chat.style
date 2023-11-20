@@ -39,7 +39,7 @@ historyReplyGroupPadding: margins(0px, 4px, 4px, 0px);
 historyReplyChannel: icon {{ "chat/reply_type_channel", windowFg }};
 historyReplyChannelPadding: margins(0px, 5px, 4px, 0px);
 
-msgReplyPadding: margins(6px, 6px, 11px, 6px);
+msgReplyPadding: margins(8px, 6px, 6px, 6px);
 msgReplyBarPos: point(1px, 0px);
 msgReplyBarSize: size(2px, 36px);
 msgReplyBarSkip: 10px;
