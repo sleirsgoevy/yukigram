@@ -194,6 +194,23 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
+		auto WideBtn = AddButton(
+				inner,
+				tr::lng_settings_wide_messages(),
+				st::settingsButtonNoIcon
+		);
+		WideBtn->setColorOverride(QColor(255, 0, 0));
+		WideBtn->toggleOn(
+				rpl::single(GetEnhancedBool("wide_messages"))
+		)->toggledChanges(
+		) | rpl::filter([=](bool toggled) {
+			return (toggled != GetEnhancedBool("wide_messages"));
+		}) | rpl::start_with_next([=](bool toggled) {
+			SetEnhancedValue("wide_messages", toggled);
+			EnhancedSettings::Write();
+			Core::Restart();
+		}, container->lifetime());
+
 		AddButton(
 				inner,
 				tr::lng_settings_show_repeater_option(),

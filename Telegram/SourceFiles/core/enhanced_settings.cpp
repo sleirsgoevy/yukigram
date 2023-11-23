@@ -324,6 +324,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("hide_stories"), false);
 		settings.insert(qsl("no_animoji"), false);
 		settings.insert(qsl("old_reply_layout"), false);
+		settings.insert(qsl("wide_messages"), false);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -376,6 +377,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("hide_stories"), GetEnhancedBool("hide_stories"));
 		settings.insert(qsl("no_animoji"), GetEnhancedBool("no_animoji"));
 		settings.insert(qsl("old_reply_layout"), GetEnhancedBool("old_reply_layout"));
+		settings.insert(qsl("wide_messages"), GetEnhancedBool("wide_messages"));
 
 		auto document = QJsonDocument();
 		document.setObject(settings);

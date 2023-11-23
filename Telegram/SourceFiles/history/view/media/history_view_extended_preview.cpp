@@ -128,7 +128,7 @@ QSize ExtendedPreview::countOptimalSize() {
 				: st::minPhotoSize),
 			minWidthForButton(),
 		}),
-		st::maxMediaSize);
+		(1 + GetEnhancedBool("wide_messages")) * st::maxMediaSize);
 	const auto scaled = CountDesiredMediaSize(dimensions);
 	auto maxWidth = qMax(scaled.width(), minWidth);
 	auto minHeight = qMax(scaled.height(), st::minPhotoSize);
@@ -150,7 +150,7 @@ QSize ExtendedPreview::countOptimalSize() {
 QSize ExtendedPreview::countCurrentSize(int newWidth) {
 	const auto &preview = _invoice->extendedPreview;
 	const auto dimensions = preview.dimensions;
-	const auto thumbMaxWidth = std::min(newWidth, st::maxMediaSize);
+	const auto thumbMaxWidth = std::min(newWidth, (1 + GetEnhancedBool("wide_messages")) * st::maxMediaSize);
 		const auto minWidth = std::min(
 		std::max({
 			_parent->minWidthForMedia(),

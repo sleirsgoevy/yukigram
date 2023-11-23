@@ -3870,7 +3870,7 @@ int Message::resizeContentGetHeight(int newWidth) {
 		}
 	}
 	accumulate_min(contentWidth, maxWidth());
-	_bubbleWidthLimit = std::max(st::msgMaxWidth, monospaceMaxWidth());
+	_bubbleWidthLimit = (GetEnhancedBool("wide_messages") ? 4000 : std::max(st::msgMaxWidth, monospaceMaxWidth()));
 	accumulate_min(contentWidth, int(_bubbleWidthLimit));
 	if (mediaDisplayed) {
 		media->resizeGetHeight(contentWidth);
