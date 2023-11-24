@@ -1,4 +1,4 @@
-﻿# 64Gram – Based on [Telegram Desktop](https://github.com/telegramdesktop/tdesktop)
+﻿# Yukigram: [64Gram](https://github.com/TDesktop-x64/tdesktop) fork – Based on [Telegram Desktop](https://github.com/telegramdesktop/tdesktop)
 
 The source code is published under GPLv3 with OpenSSL exception, the license is available [here][license].
 

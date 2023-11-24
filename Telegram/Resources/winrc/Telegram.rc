@@ -60,11 +60,11 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "64Gram"
-            VALUE "FileDescription", "64Gram Desktop"
+            VALUE "CompanyName", "Yukigram"
+            VALUE "FileDescription", "Yukigram Desktop"
             VALUE "FileVersion", "1.1.4.0"
             VALUE "LegalCopyright", "Copyright (C) 2014-2022"
-            VALUE "ProductName", "64Gram Desktop"
+            VALUE "ProductName", "Yukigram Desktop"
             VALUE "ProductVersion", "1.1.4.0"
         END
     END

@@ -65,7 +65,7 @@ AboutBox::AboutBox(QWidget *parent)
 }
 
 void AboutBox::prepare() {
-	setTitle(rpl::single(u"64Gram Yuki"_q));
+	setTitle(rpl::single(u"Yukigram"_q));
 
 	addButton(tr::lng_close(), [this] { closeBox(); });
 
