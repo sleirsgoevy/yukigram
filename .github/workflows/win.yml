@@ -49,7 +49,7 @@ jobs:
         arch: [Win32, x64]
 
     env:
-      UPLOAD_ARTIFACT: "false"
+      UPLOAD_ARTIFACT: "true"
       ONLY_CACHE: "false"
       PREPARE_PATH: "Telegram/build/prepare/prepare.py"
 
@@ -107,7 +107,7 @@ jobs:
           GYP_MSVS_VERSION: 2022
         run: |
           cd %TBUILD%
-          %REPO_NAME%\Telegram\build\prepare\win.bat skip-release silent
+          %REPO_NAME%\Telegram\build\prepare\win.bat silent
 
       - name: Read defines.
         shell: bash
@@ -122,11 +122,7 @@ jobs:
           fi
           echo "TDESKTOP_BUILD_DEFINE=$DEFINE" >> $GITHUB_ENV
 
-          API="-D TDESKTOP_API_TEST=ON"
-          if [ $GITHUB_REF == 'refs/heads/nightly' ]; then
-            echo "Use the open credentials."
-            API="-D TDESKTOP_API_ID=611335 -D TDESKTOP_API_HASH=d524b414d21f4d37f08684c1df41ac9c"
-          fi
+          API="-D TDESKTOP_API_ID=\"${{ secrets.API_ID }}\" -D TDESKTOP_API_HASH=\"${{ secrets.API_HASH }}\""
           echo "TDESKTOP_BUILD_API=$API" >> $GITHUB_ENV
 
       - name: Free up some disk space.
@@ -150,13 +146,13 @@ jobs:
           -DCMAKE_SYSTEM_VERSION=%SDK%
 
           cd ..\out
-          msbuild -m Telegram.sln /p:Configuration=Debug,Platform=${{ matrix.arch }},DebugSymbols=false,DebugType=none
+          msbuild -m Telegram.sln /p:Configuration=Release,Platform=${{ matrix.arch }},DebugSymbols=false,DebugType=none
 
       - name: Move artifact.
         if: (env.UPLOAD_ARTIFACT == 'true') || ${{ github.ref == 'refs/heads/nightly' }}
         run: |
           mkdir artifact
-          move %TBUILD%\%REPO_NAME%\out\Debug\Telegram.exe artifact/
+          move %TBUILD%\%REPO_NAME%\out\Release\Telegram.exe artifact/
       - uses: actions/upload-artifact@master
         name: Upload artifact.
         if: (env.UPLOAD_ARTIFACT == 'true') || ${{ github.ref == 'refs/heads/nightly' }}

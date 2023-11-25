@@ -44,3 +44,7 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL "mips64")
         -mxgot
     )
 endif()
+
+if (WIN32)
+    target_compile_options(td_scheme PRIVATE /bigobj)
+endif()

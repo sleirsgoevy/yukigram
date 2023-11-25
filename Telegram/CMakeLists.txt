@@ -1738,6 +1738,8 @@ endif()
 set_target_properties(Telegram PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${output_folder})
 
 if (WIN32)
+    target_compile_options(Telegram PRIVATE /bigobj)
+
     target_link_options(Telegram
     PRIVATE
         /DELAYLOAD:secur32.dll
