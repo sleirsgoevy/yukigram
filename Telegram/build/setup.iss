@@ -1,5 +1,5 @@
 #define MyAppShortName "Yukigram"
-#define MyAppName "Yukigram Desktop"
+#define MyAppName "Yukigram"
 #define MyAppPublisher "Yukigram"
 #define MyAppURL "https://github.com/TDesktop-x64"
 #define MyAppExeName "Telegram.exe"

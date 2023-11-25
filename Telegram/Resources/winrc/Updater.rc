@@ -52,10 +52,10 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "Yukigram"
-            VALUE "FileDescription", "Yukigram Desktop Updater"
+            VALUE "FileDescription", "Yukigram Updater"
             VALUE "FileVersion", "1.1.4.0"
             VALUE "LegalCopyright", "Copyright (C) 2014-2022"
-            VALUE "ProductName", "Yukigram Desktop"
+            VALUE "ProductName", "Yukigram"
             VALUE "ProductVersion", "1.1.4.0"
         END
     END

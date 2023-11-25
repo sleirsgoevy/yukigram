@@ -1,8 +1,8 @@
 [Desktop Entry]
-Name=64Gram Desktop
+Name=Yukigram
 Comment=Unofficial desktop version of Telegram messaging app
-TryExec=telegram-desktop
-Exec=telegram-desktop -- %u
+TryExec=yukigram
+Exec=yukigram -- %u
 Icon=telegram
 Terminal=false
 StartupWMClass=64Gram
@@ -17,6 +17,6 @@ X-GNOME-UsesNotifications=true
 X-GNOME-SingleWindow=true
 
 [Desktop Action quit]
-Exec=telegram-desktop -quit
+Exec=yukigram -quit
 Name=Quit Telegram
 Icon=application-exit
