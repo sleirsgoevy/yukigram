@@ -359,6 +359,12 @@ void FillMenu(
 				&st::menuIconInfo);
 		}
 		addAction({
+			.text = tr::lng_settings_restart_immediately(tr::now),
+			.handler = [=] { Core::Restart(); },
+			.icon = &st::menuIconLeaveAttention,
+			.isAttention = true
+		});
+		addAction({
 			.text = tr::lng_settings_logout(tr::now),
 			.handler = [=] { window->showLogoutConfirmation(); },
 			.icon = &st::menuIconLeaveAttention,

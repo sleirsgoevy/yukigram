@@ -4596,3 +4596,4 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_no_animoji" = "Disable animated big emoji";
 "lng_settings_old_reply_layout" = "Use old reply layout and paddings";
 "lng_settings_wide_messages" = "Wide message bubbles and large media";
+"lng_settings_restart_immediately" = "Restart now";
