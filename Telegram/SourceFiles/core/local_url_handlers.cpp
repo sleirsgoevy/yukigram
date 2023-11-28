@@ -942,10 +942,22 @@ bool ResolveBoost(
 	return true;
 }
 
+bool ShowNya(
+		Window::SessionController *controller,
+		const Match &match,
+		const QVariant &context) {
+	Ui::Toast::Show("Meow >.<");
+	return true;
+}
+
 } // namespace
 
 const std::vector<LocalUrlHandler> &LocalUrlHandlers() {
 	static auto Result = std::vector<LocalUrlHandler>{
+		{
+			u"^nya$"_q,
+			ShowNya
+		},
 		{
 			u"^join/?\\?invite=([a-zA-Z0-9\\.\\_\\-]+)(&|$)"_q,
 			JoinGroupByHash
