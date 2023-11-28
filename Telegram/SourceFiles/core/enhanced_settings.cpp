@@ -325,6 +325,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("no_animoji"), false);
 		settings.insert(qsl("old_reply_layout"), false);
 		settings.insert(qsl("wide_messages"), false);
+		settings.insert(qsl("force_mobile"), false);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -378,6 +379,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("no_animoji"), GetEnhancedBool("no_animoji"));
 		settings.insert(qsl("old_reply_layout"), GetEnhancedBool("old_reply_layout"));
 		settings.insert(qsl("wide_messages"), GetEnhancedBool("wide_messages"));
+		settings.insert(qsl("force_mobile"), GetEnhancedBool("force_mobile"));
 
 		auto document = QJsonDocument();
 		document.setObject(settings);

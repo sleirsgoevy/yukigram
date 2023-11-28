@@ -1697,6 +1697,7 @@ auto SessionController::computeColumnLayout() const -> ColumnLayout {
 	auto dialogsWidth = 0, chatWidth = 0, thirdWidth = 0;
 
 	auto useOneColumnLayout = [&] {
+		if (GetEnhancedBool("force_mobile")) return true;
 		auto minimalNormal = st::columnMinimalWidthLeft
 			+ st::columnMinimalWidthMain;
 		if (_isPrimary && bodyWidth < minimalNormal) {

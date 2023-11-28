@@ -600,6 +600,23 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
+		auto MobileBtn = AddButton(
+				inner,
+				tr::lng_settings_force_mobile(),
+				st::settingsButtonNoIcon
+		);
+		MobileBtn->setColorOverride(QColor(255, 0, 0));
+		MobileBtn->toggleOn(
+				rpl::single(GetEnhancedBool("force_mobile"))
+		)->toggledChanges(
+		) | rpl::filter([=](bool toggled) {
+			return (toggled != GetEnhancedBool("force_mobile"));
+		}) | rpl::start_with_next([=](bool toggled) {
+			SetEnhancedValue("force_mobile", toggled);
+			EnhancedSettings::Write();
+			Core::Restart();
+		}, container->lifetime());
+
 		AddSkip(container);
 	}
 
