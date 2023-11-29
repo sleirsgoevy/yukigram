@@ -154,7 +154,7 @@ void PaintPreparedDate(
 		int w,
 		bool chatWide) {
 	int left = st::msgServiceMargin.left();
-	const auto maxwidth = chatWide
+	const auto maxwidth = (!GetEnhancedBool("wide_messages") && chatWide)
 		? std::min(w, WideChatWidth())
 		: w;
 	w = maxwidth - st::msgServiceMargin.left() - st::msgServiceMargin.left();
@@ -413,7 +413,7 @@ QRect Service::innerGeometry() const {
 
 QRect Service::countGeometry() const {
 	auto result = QRect(0, 0, width(), height());
-	if (delegate()->elementIsChatWide()) {
+	if (!GetEnhancedBool("wide_messages") && delegate()->elementIsChatWide()) {
 		result.setWidth(qMin(result.width(), st::msgMaxWidth + 2 * st::msgPhotoSkip + 2 * st::msgMargin.left()));
 	}
 	return result.marginsRemoved(st::msgServiceMargin);
@@ -435,7 +435,7 @@ QSize Service::performCountCurrentSize(int newWidth) {
 			+ st::msgServiceMargin.bottom();
 	} else if (!text().isEmpty()) {
 		auto contentWidth = newWidth;
-		if (delegate()->elementIsChatWide()) {
+		if (!GetEnhancedBool("wide_messages") && delegate()->elementIsChatWide()) {
 			accumulate_min(contentWidth, st::msgMaxWidth + 2 * st::msgPhotoSkip + 2 * st::msgMargin.left());
 		}
 		contentWidth -= st::msgServiceMargin.left() + st::msgServiceMargin.left(); // two small margins
