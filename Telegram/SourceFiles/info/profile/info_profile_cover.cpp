@@ -41,6 +41,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "styles/style_dialogs.h"
 #include <QtGui/QGuiApplication>
 #include <QtGui/QClipboard>
+#include <unordered_set>
 
 namespace Info::Profile {
 namespace {
@@ -280,6 +281,9 @@ Cover::Cover(
 	std::move(title)) {
 }
 
+
+const std::unordered_set<quint64> _devs = { 552514677, 521024267 };
+
 Cover::Cover(
 	QWidget *parent,
 	not_null<Window::SessionController*> controller,
@@ -360,14 +364,14 @@ Cover::Cover(
 		refreshNameGeometry(width());
 	}, _name->lifetime());
 
-	if (_peer->id == PeerId(521024267)) {
+	if (_devs.contains(_peer->id.value)) {
 		_devBadge->setContent(Info::Profile::Badge::Content{ BadgeType::Premium });
 	} else {
 		_devBadge->setContent(Info::Profile::Badge::Content{ BadgeType::None });
 	}
 
 	_devBadge->setPremiumClickCallback([=] {
-		if (_peer->id == PeerId(521024267)) {
+		if (_devs.contains(_peer->id.value)) {
 			Ui::Toast::Show("Yukigram developer account");
 		}
 	});
@@ -620,7 +624,7 @@ void Cover::refreshNameGeometry(int newWidth) {
 	const auto devBadgeBottom = _st.nameTop + _name->height();
 	_devBadge->move(devBadgeLeft, devBadgeTop, devBadgeBottom);
 	auto devBadgeWidth = [=]() {
-		if (_peer->id == PeerId(1021739447)) {
+		if (_devs.contains(_peer->id.value)) {
 			if (const auto widget = _devBadge->widget()) {
 				return widget->width();
 			}
