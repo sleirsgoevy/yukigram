@@ -2118,7 +2118,7 @@ auto StickersListWidget::collectRecentStickers() -> std::vector<Sticker> {
 	_custom.reserve(cloudCount + recent.size() + customCount);
 
 	auto add = [&](not_null<DocumentData*> document, bool custom) {
-		if (result.size() >= kRecentDisplayLimit) {
+		if (!GetEnhancedBool("disable_recent_stickers_limit") && result.size() >= kRecentDisplayLimit) {
 			return;
 		}
 		const auto i = ranges::find(result, document, &Sticker::document);
