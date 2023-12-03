@@ -618,6 +618,23 @@ namespace Settings {
 			Core::Restart();
 		}, container->lifetime());
 
+		auto DisableRecentStickersLimitBtn = AddButtonWithIcon(
+				inner,
+				tr::lng_settings_disable_recent_stickers_limit(),
+				st::settingsButtonNoIcon
+		);
+		DisableRecentStickersLimitBtn->setColorOverride(QColor(255, 0, 0));
+		DisableRecentStickersLimitBtn->toggleOn(
+				rpl::single(GetEnhancedBool("disable_recent_stickers_limit"))
+		)->toggledChanges(
+		) | rpl::filter([=](bool toggled) {
+			return (toggled != GetEnhancedBool("disable_recent_stickers_limit"));
+		}) | rpl::start_with_next([=](bool toggled) {
+			SetEnhancedValue("disable_recent_stickers_limit", toggled);
+			EnhancedSettings::Write();
+			Core::Restart();
+		}, container->lifetime());
+
 		AddSkip(container);
 	}
 
