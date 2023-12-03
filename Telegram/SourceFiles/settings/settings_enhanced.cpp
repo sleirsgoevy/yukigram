@@ -13,6 +13,7 @@ https://github.com/TDesktop-x64/tdesktop/blob/dev/LEGAL
 
 #include "settings/settings_common.h"
 #include "settings/settings_chat.h"
+#include <ui/vertical_list.h>
 #include "ui/wrap/vertical_layout.h"
 #include "ui/wrap/slide_wrap.h"
 #include "ui/widgets/buttons.h"
@@ -64,7 +65,7 @@ namespace Settings {
 			Ui::show(Box<NetBoostBox>());
 		});
 
-		auto donwloadBoostBtn = AddButton(
+		auto donwloadBoostBtn = AddButtonWithIcon(
 				inner,
 				tr::lng_settings_net_download_speed_boost(),
 				st::settingsButtonNoIcon
@@ -146,7 +147,7 @@ namespace Settings {
 						object_ptr<Ui::VerticalLayout>(container)));
 		const auto inner = wrap->entity();
 
-		auto MsgIdBtn = AddButton(
+		auto MsgIdBtn = AddButtonWithIcon(
 				inner,
 				tr::lng_settings_show_message_id(),
 				st::settingsButtonNoIcon
@@ -163,7 +164,7 @@ namespace Settings {
 			Core::Restart();
 		}, container->lifetime());
 
-		auto AnimojiBtn = AddButton(
+		auto AnimojiBtn = AddButtonWithIcon(
 				inner,
 				tr::lng_settings_no_animoji(),
 				st::settingsButtonNoIcon
@@ -180,7 +181,7 @@ namespace Settings {
 			Core::Restart();
 		}, container->lifetime());
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_old_reply_layout(),
 				st::settingsButtonNoIcon
@@ -194,7 +195,7 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
-		auto WideBtn = AddButton(
+		auto WideBtn = AddButtonWithIcon(
 				inner,
 				tr::lng_settings_wide_messages(),
 				st::settingsButtonNoIcon
@@ -211,7 +212,7 @@ namespace Settings {
 			Core::Restart();
 		}, container->lifetime());
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_show_repeater_option(),
 				st::settingsButtonNoIcon
@@ -226,7 +227,7 @@ namespace Settings {
 		}, container->lifetime());
 
 		if (GetEnhancedBool("show_repeater_option")) {
-			AddButton(
+			AddButtonWithIcon(
 					inner,
 					tr::lng_settings_repeater_reply_to_orig_msg(),
 					st::settingsButtonNoIcon
@@ -264,7 +265,7 @@ namespace Settings {
 			Ui::show(Box<AlwaysDeleteBox>());
 		});
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_disable_cloud_draft_sync(),
 				st::settingsButtonNoIcon
@@ -280,7 +281,7 @@ namespace Settings {
 
 		AddSkip(container);
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_hide_classic_forward(),
 				st::settingsButtonNoIcon
@@ -294,7 +295,7 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_disable_link_warning(),
 				st::settingsButtonNoIcon
@@ -308,7 +309,7 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_disable_premium_animation(),
 				st::settingsButtonNoIcon
@@ -324,7 +325,7 @@ namespace Settings {
 
 		QString langPackBaseId = Lang::GetInstance().baseId();
 		if (langPackBaseId == "zh-hant-raw" || langPackBaseId == "zh-hans-raw") {
-			AddButton(
+			AddButtonWithIcon(
 					inner,
 					tr::lng_settings_translate_to_tc(),
 					st::settingsButtonNoIcon
@@ -339,7 +340,7 @@ namespace Settings {
 			}, container->lifetime());
 		}
 
-		auto secondsBtn = AddButton(
+		auto secondsBtn = AddButtonWithIcon(
 			inner,
 			tr::lng_settings_show_seconds(),
 			st::settingsButtonNoIcon
@@ -356,7 +357,7 @@ namespace Settings {
 			QTimer::singleShot(1 * 1000, []{ Core::Restart(); });
 		}, container->lifetime());
 
-		auto hideBtn = AddButton(
+		auto hideBtn = AddButtonWithIcon(
 			inner,
 			tr::lng_settings_hide_messages(),
 			st::settingsButtonNoIcon
@@ -399,7 +400,7 @@ namespace Settings {
 						object_ptr<Ui::VerticalLayout>(container)));
 		const auto inner = wrap->entity();
 
-		auto EmojiBtn = AddButton(
+		auto EmojiBtn = AddButtonWithIcon(
 				inner,
 				tr::lng_settings_show_emoji_button_as_text(),
 				st::settingsButtonNoIcon
@@ -418,7 +419,7 @@ namespace Settings {
 
 		AddDividerText(inner, tr::lng_show_emoji_button_as_text_desc());
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_show_scheduled_button(),
 				st::settingsButtonNoIcon
@@ -446,7 +447,7 @@ namespace Settings {
 						object_ptr<Ui::VerticalLayout>(container)));
 		const auto inner = wrap->entity();
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_radio_controller(),
 				st::settingsButtonNoIcon
@@ -456,7 +457,7 @@ namespace Settings {
 
 		AddDividerText(inner, tr::lng_radio_controller_desc());
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_auto_unmute(),
 				st::settingsButtonNoIcon
@@ -495,7 +496,7 @@ namespace Settings {
 			Ui::show(Box<BitrateController>());
 		});
 
-		AddButton(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_enable_hd_video(),
 				st::settingsButtonNoIcon
@@ -524,7 +525,7 @@ namespace Settings {
 						object_ptr<Ui::VerticalLayout>(container)));
 		const auto inner = wrap->entity();
 
-		auto hideBtn = AddButton(
+		auto hideBtn = AddButtonWithIcon(
 			container,
 			tr::lng_settings_hide_all_chats(),
 			st::settingsButtonNoIcon
@@ -541,7 +542,7 @@ namespace Settings {
 			Core::Restart();
 		}, container->lifetime());
 
-		AddButton(
+		AddButtonWithIcon(
 				container,
 				tr::lng_settings_replace_edit_button(),
 				st::settingsButtonNoIcon
@@ -556,7 +557,7 @@ namespace Settings {
 			controller->reloadFiltersMenu();
 		}, container->lifetime());
 
-		AddButton(
+		AddButtonWithIcon(
 				container,
 				tr::lng_settings_skip_message(),
 				st::settingsButtonNoIcon
@@ -572,7 +573,7 @@ namespace Settings {
 
 		AddDividerText(container, tr::lng_settings_skip_message_desc());
 
-		AddButton(
+		AddButtonWithIcon(
 				container,
 				tr::lng_settings_hide_counter(),
 				st::settingsButtonNoIcon
@@ -586,7 +587,7 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
-		AddButton(
+		AddButtonWithIcon(
 				container,
 				tr::lng_settings_hide_stories(),
 				st::settingsButtonNoIcon
@@ -600,7 +601,7 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
-		auto MobileBtn = AddButton(
+		auto MobileBtn = AddButtonWithIcon(
 				inner,
 				tr::lng_settings_force_mobile(),
 				st::settingsButtonNoIcon

@@ -367,7 +367,7 @@ void Photo::draw(Painter &p, const PaintContext &context) const {
 		}
 	}
 
-	const auto showEnlarge = loaded && _showEnlarge;
+	const auto showEnlarge = false;
 	const auto paintInCenter = (radial || (!loaded && !_data->loading()));
 	if (paintInCenter || showEnlarge) {
 		p.setPen(Qt::NoPen);
@@ -1107,10 +1107,8 @@ SelectedQuote Photo::selectedQuote(TextSelection selection) const {
 	return Element::FindSelectedQuote(_caption, selection, _realParent);
 }
 
-TextSelection Photo::selectionFromQuote(
-		not_null<HistoryItem*> item,
-		const TextWithEntities &quote) const {
-	return Element::FindSelectionFromQuote(_caption, item, quote);
+TextSelection Photo::selectionFromQuote(const SelectedQuote &quote) const {
+	return Element::FindSelectionFromQuote(_caption, quote);
 }
 
 void Photo::hideSpoilers() {

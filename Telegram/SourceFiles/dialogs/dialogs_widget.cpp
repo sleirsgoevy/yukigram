@@ -522,24 +522,44 @@ void Widget::chosenRow(const ChosenRow &row) {
 		}
 		return;
 	} else if (const auto topic = row.key.topic()) {
+		session().data().saveViewAsMessages(topic->forum(), false);
 		controller()->showThread(
 			topic,
 			row.message.fullId.msg,
 			Window::SectionShow::Way::ClearStack);
-	} else if (history && history->isForum() && !row.message.fullId) {
+	} else if (history
+		&& history->isForum()
+		&& !row.message.fullId
+		&& (!controller()->adaptive().isOneColumn()
+			|| !history->peer->forum()->channel()->viewForumAsMessages())) {
 		const auto forum = history->peer->forum();
 		if (controller()->shownForum().current() == forum) {
 			controller()->closeForum();
-		} else {
-			controller()->showForum(
-				forum,
-				Window::SectionShow().withChildColumn());
+			return;
+		}
+		controller()->showForum(
+			forum,
+			Window::SectionShow().withChildColumn());
+		if (forum->channel()->viewForumAsMessages()) {
+			controller()->showThread(
+				history,
+				ShowAtUnreadMsgId,
+				Window::SectionShow::Way::ClearStack);
+		} else if (!controller()->adaptive().isOneColumn()) {
+			const auto item = history->chatListMessage();
+			if (const auto topic = item ? item->topic() : nullptr) {
+				controller()->showThread(
+					topic,
+					ShowAtUnreadMsgId,
+					Window::SectionShow::Way::ClearStack);
+			}
 		}
 		return;
 	} else if (history) {
 		const auto peer = history->peer;
 		if (row.message.fullId.msg == ShowAtUnreadMsgId) {
-			if (row.userpicClick
+			if (!GetEnhancedBool("hide_stories")
+				&& row.userpicClick
 				&& peer->hasActiveStories()
 				&& !peer->isSelf()) {
 				controller()->openPeerStories(peer->id);
@@ -559,7 +579,7 @@ void Widget::chosenRow(const ChosenRow &row) {
 			hideChildList();
 		}
 	} else if (const auto folder = row.key.folder()) {
-		if (row.userpicClick) {
+		if (!GetEnhancedBool("hide_stories") && row.userpicClick) {
 			const auto list = Data::StorySourcesList::Hidden;
 			const auto &sources = session().data().stories().sources(list);
 			if (!sources.empty()) {
