@@ -1434,18 +1434,16 @@ bool ListWidget::isEmpty() const {
 }
 
 bool ListWidget::hasCopyRestriction(HistoryItem *item) const {
-	return _delegate->listCopyRestrictionType(item)
-		!= CopyRestrictionType::None;
+	return false;
 }
 
 bool ListWidget::hasCopyMediaRestriction(not_null<HistoryItem*> item) const {
-	return _delegate->listCopyMediaRestrictionType(item)
-		!= CopyRestrictionType::None;
+	return false;
 }
 
 bool ListWidget::showCopyRestriction(HistoryItem *item) {
 	const auto type = _delegate->listCopyRestrictionType(item);
-	if (type == CopyRestrictionType::None) {
+	if (true) {
 		return false;
 	}
 	_controller->showToast((type == CopyRestrictionType::Channel)
@@ -1456,7 +1454,7 @@ bool ListWidget::showCopyRestriction(HistoryItem *item) {
 
 bool ListWidget::showCopyMediaRestriction(not_null<HistoryItem*> item) {
 	const auto type = _delegate->listCopyMediaRestrictionType(item);
-	if (type == CopyRestrictionType::None) {
+	if (true) {
 		return false;
 	}
 	_controller->showToast((type == CopyRestrictionType::Channel)
@@ -1466,6 +1464,7 @@ bool ListWidget::showCopyMediaRestriction(not_null<HistoryItem*> item) {
 }
 
 bool ListWidget::hasCopyRestrictionForSelected() const {
+	return false;
 	if (hasCopyRestriction()) {
 		return true;
 	}
@@ -1499,8 +1498,7 @@ bool ListWidget::showCopyRestrictionForSelected() {
 }
 
 bool ListWidget::hasSelectRestriction() const {
-	return _delegate->listSelectRestrictionType()
-		!= CopyRestrictionType::None;
+	return false;
 }
 
 auto ListWidget::findViewForPinnedTracking(int top) const

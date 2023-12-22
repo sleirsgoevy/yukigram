@@ -330,7 +330,7 @@ void MonospaceClickHandler::onClick(ClickContext context) const {
 	if (const auto controller = my.sessionWindow.get()) {
 		auto &data = controller->session().data();
 		const auto item = data.message(my.itemId);
-		const auto hasCopyRestriction = item
+		const auto hasCopyRestriction = false && item
 			&& (!item->history()->peer->allowsForwarding()
 				|| item->forbidsForward());
 		if (hasCopyRestriction) {
