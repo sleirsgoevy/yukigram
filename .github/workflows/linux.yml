@@ -96,6 +96,7 @@ jobs:
           -D CMAKE_EXE_LINKER_FLAGS="-s" \
           -D TDESKTOP_API_ID="${{ secrets.API_ID }}" \
           -D TDESKTOP_API_HASH="${{ secrets.API_HASH }}" \
+          -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON \
           -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF \
           $DEFINE
 

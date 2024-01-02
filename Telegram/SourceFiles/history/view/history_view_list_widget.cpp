@@ -2180,7 +2180,7 @@ void ListWidget::paintEvent(QPaintEvent *e) {
 					userpicTop,
 					view->width(),
 					st::msgPhotoSize);
-			} else if (const auto info = item->hiddenSenderInfo()) {
+			} else if (const auto info = item->displayHiddenSenderInfo()) {
 				if (info->customUserpic.empty()) {
 					info->emptyUserpic.paintCircle(
 						p,
@@ -3664,7 +3664,7 @@ void ListWidget::performDrag() {
 		_reactionsManager->updateButton({});
 		_controller->widget()->launchDrag(
 			std::move(mimeData),
-			crl::guard(this, [=] { mouseActionUpdate(QCursor::pos()); }));;
+			crl::guard(this, [=] { mouseActionUpdate(QCursor::pos()); }));
 	}
 }
 
