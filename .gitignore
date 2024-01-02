@@ -51,3 +51,4 @@ stage
 .idea/
 cmake-build-debug/
 .ccls-cache
+yuki-build.sh
