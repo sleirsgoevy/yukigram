@@ -54,24 +54,20 @@ namespace Settings {
 		AddSkip(inner);
 		AddSubsectionTitle(inner, tr::lng_settings_network());
 
-		auto uploadBoostBtn = AddButtonWithLabel(
+		AddButtonWithLabel(
 				inner,
 				tr::lng_settings_net_upload_speed_boost(),
 				rpl::single(NetBoostBox::BoostLabel(GetEnhancedInt("net_speed_boost"))),
-				st::settingsButtonNoIcon
-		);
-		uploadBoostBtn->setColorOverride(QColor(255, 0, 0));
-		uploadBoostBtn->addClickHandler([=] {
+				st::settingsAttentionButton
+		)->addClickHandler([=] {
 			Ui::show(Box<NetBoostBox>());
 		});
 
-		auto donwloadBoostBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_net_download_speed_boost(),
-				st::settingsButtonNoIcon
-		);
-		donwloadBoostBtn->setColorOverride(QColor(255, 0, 0));
-		donwloadBoostBtn->toggleOn(
+				st::settingsAttentionButton
+		)->toggleOn(
 				rpl::single(GetEnhancedBool("net_dl_speed_boost"))
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
@@ -147,13 +143,11 @@ namespace Settings {
 						object_ptr<Ui::VerticalLayout>(container)));
 		const auto inner = wrap->entity();
 
-		auto MsgIdBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_show_message_id(),
-				st::settingsButtonNoIcon
-		);
-		MsgIdBtn->setColorOverride(QColor(255, 0, 0));
-		MsgIdBtn->toggleOn(
+				st::settingsAttentionButton
+		)->toggleOn(
 				rpl::single(GetEnhancedBool("show_messages_id"))
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
@@ -164,13 +158,11 @@ namespace Settings {
 			Core::Restart();
 		}, container->lifetime());
 
-		auto AnimojiBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_no_animoji(),
-				st::settingsButtonNoIcon
-		);
-		AnimojiBtn->setColorOverride(QColor(255, 0, 0));
-		AnimojiBtn->toggleOn(
+				st::settingsAttentionButton
+		)->toggleOn(
 				rpl::single(GetEnhancedBool("no_animoji"))
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
@@ -195,13 +187,11 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
-		auto WideBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_wide_messages(),
-				st::settingsButtonNoIcon
-		);
-		WideBtn->setColorOverride(QColor(255, 0, 0));
-		WideBtn->toggleOn(
+				st::settingsAttentionButton
+		)->toggleOn(
 				rpl::single(GetEnhancedBool("wide_messages"))
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
@@ -369,13 +359,11 @@ namespace Settings {
 			}, container->lifetime());
 		}
 
-		auto secondsBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 			inner,
 			tr::lng_settings_show_seconds(),
-			st::settingsButtonNoIcon
-		);
-		secondsBtn->setColorOverride(QColor(255, 0, 0));
-		secondsBtn->toggleOn(
+			st::settingsAttentionButton
+		)->toggleOn(
 			rpl::single(GetEnhancedBool("show_seconds"))
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
@@ -386,13 +374,11 @@ namespace Settings {
 			QTimer::singleShot(1 * 1000, []{ Core::Restart(); });
 		}, container->lifetime());
 
-		auto hideBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 			inner,
 			tr::lng_settings_hide_messages(),
 			st::settingsButtonNoIcon
-		);
-		hideBtn->setColorOverride(QColor(255, 0, 0));
-		hideBtn->toggleOn(
+		)->toggleOn(
 				rpl::single(GetEnhancedBool("blocked_user_spoiler_mode"))
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
@@ -429,13 +415,11 @@ namespace Settings {
 						object_ptr<Ui::VerticalLayout>(container)));
 		const auto inner = wrap->entity();
 
-		auto EmojiBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_show_emoji_button_as_text(),
 				st::settingsButtonNoIcon
-		);
-		EmojiBtn->setColorOverride(QColor(255, 0, 0));
-		EmojiBtn->toggleOn(
+		)->toggleOn(
 				rpl::single(GetEnhancedBool("show_emoji_button_as_text"))
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
@@ -554,13 +538,11 @@ namespace Settings {
 						object_ptr<Ui::VerticalLayout>(container)));
 		const auto inner = wrap->entity();
 
-		auto hideBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 			container,
 			tr::lng_settings_hide_all_chats(),
 			st::settingsButtonNoIcon
-		);
-		hideBtn->setColorOverride(QColor(255, 0, 0));
-		hideBtn->toggleOn(
+		)->toggleOn(
 				rpl::single(GetEnhancedBool("hide_all_chats"))
 		)->toggledValue(
 		) | rpl::filter([](bool enabled) {
@@ -630,13 +612,11 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
-		auto MobileBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_force_mobile(),
 				st::settingsButtonNoIcon
-		);
-		MobileBtn->setColorOverride(QColor(255, 0, 0));
-		MobileBtn->toggleOn(
+		)->toggleOn(
 				rpl::single(GetEnhancedBool("force_mobile"))
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
@@ -647,13 +627,11 @@ namespace Settings {
 			Core::Restart();
 		}, container->lifetime());
 
-		auto DisableRecentStickersLimitBtn = AddButtonWithIcon(
+		AddButtonWithIcon(
 				inner,
 				tr::lng_settings_disable_recent_stickers_limit(),
 				st::settingsButtonNoIcon
-		);
-		DisableRecentStickersLimitBtn->setColorOverride(QColor(255, 0, 0));
-		DisableRecentStickersLimitBtn->toggleOn(
+		)->toggleOn(
 				rpl::single(GetEnhancedBool("disable_recent_stickers_limit"))
 		)->toggledChanges(
 		) | rpl::filter([=](bool toggled) {
