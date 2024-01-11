@@ -328,6 +328,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("wide_messages"), false);
 		settings.insert(qsl("force_mobile"), false);
 		settings.insert(qsl("disable_recent_stickers_limit"), false);
+		settings.insert(qsl("show_similar_on_joined"), false);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -384,6 +385,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("wide_messages"), GetEnhancedBool("wide_messages"));
 		settings.insert(qsl("force_mobile"), GetEnhancedBool("force_mobile"));
 		settings.insert(qsl("disable_recent_stickers_limit"), GetEnhancedBool("disable_recent_stickers_limit"));
+		settings.insert(qsl("show_similar_on_joined"), GetEnhancedBool("show_similar_on_joined"));
 
 		auto document = QJsonDocument();
 		document.setObject(settings);

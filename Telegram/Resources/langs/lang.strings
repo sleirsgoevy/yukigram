@@ -4748,3 +4748,4 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_restart_immediately" = "Restart now";
 "lng_settings_force_mobile" = "Force use mobile-like layout";
 "lng_settings_disable_recent_stickers_limit" = "Disable the recent stickers limit";
+"lng_settings_show_similar_on_joined" = "Show similar channels on join message";
