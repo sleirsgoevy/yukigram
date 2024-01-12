@@ -46,7 +46,7 @@ jobs:
 
     strategy:
       matrix:
-        arch: [Win32, x64]
+        arch: [x64]
         generator: [""]
 
     env:
