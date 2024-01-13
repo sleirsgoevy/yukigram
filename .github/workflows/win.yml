@@ -140,7 +140,8 @@ jobs:
           echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> $GITHUB_ENV
           echo "TDESKTOP_BUILD_API=$API" >> $GITHUB_ENV
 
-          echo '#define TDESKTOP_DISABLE_AUTOUPDATE' | cat - Telegram/SourceFiles/core/update_checker.cpp > temp && mv temp Telegram/SourceFiles/core/update_checker.cpp
+          cd "$TBUILD/$REPO_NAME/Telegram/SourceFiles/core/"
+          echo '#define TDESKTOP_DISABLE_AUTOUPDATE' | cat - update_checker.cpp > temp && mv temp update_checker.cpp
 
       - name: Free up some disk space.
         run: |
