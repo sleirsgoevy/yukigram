@@ -1137,6 +1137,15 @@ void Poll::paintRadio(
 		p.setOpacity(o * (over ? st::historyPollRadioOpacityOver : st::historyPollRadioOpacity));
 	}
 
+	const auto use_squares = GetEnhancedBool("multichoice_squares") && (_flags & PollData::Flag::MultiChoice);
+	const auto draw_rect = [&](const QRectF &rect) {
+		if (use_squares) {
+			p.drawRoundedRect(rect, 5, 5, Qt::RelativeSize);
+		} else {
+			p.drawEllipse(rect);
+		}
+	};
+
 	const auto rect = QRectF(left, top, radio.diameter, radio.diameter).marginsRemoved(QMarginsF(radio.thickness / 2., radio.thickness / 2., radio.thickness / 2., radio.thickness / 2.));
 	if (_sendingAnimation && _sendingAnimation->option == answer.option) {
 		const auto &active = stm->msgServiceFg;
@@ -1148,6 +1157,8 @@ void Poll::paintRadio(
 			pen.setWidth(radio.thickness);
 			pen.setCapStyle(Qt::RoundCap);
 			p.setPen(pen);
+
+			// The WHAT THE FUCK
 			p.drawArc(
 				rect,
 				state.arcFrom,
@@ -1158,7 +1169,7 @@ void Poll::paintRadio(
 			auto pen = regular->p;
 			pen.setWidth(radio.thickness);
 			p.setPen(pen);
-			p.drawEllipse(rect);
+			draw_rect(rect);
 		}
 		if (checkmark > 0.) {
 			const auto removeFull = (radio.diameter / 2 - radio.thickness);
@@ -1168,7 +1179,11 @@ void Poll::paintRadio(
 			pen.setWidth(radio.thickness);
 			p.setPen(pen);
 			p.setBrush(color);
-			p.drawEllipse(rect.marginsRemoved({ removeNow, removeNow, removeNow, removeNow }));
+
+			// THE FUCK IS THIS
+			draw_rect(rect.marginsRemoved({ removeNow, removeNow, removeNow, removeNow }));
+
+			// AND THIS
 			const auto &icon = stm->historyPollChosen;
 			icon.paint(p, left + (radio.diameter - icon.width()) / 2, top + (radio.diameter - icon.height()) / 2, width());
 		}

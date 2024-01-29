@@ -219,6 +219,21 @@ namespace Settings {
 
 		AddButtonWithIcon(
 				inner,
+				tr::lng_settings_multichoice_squares(),
+				st::settingsAttentionButton
+		)->toggleOn(
+				rpl::single(GetEnhancedBool("multichoice_squares"))
+		)->toggledChanges(
+		) | rpl::filter([=](bool toggled) {
+			return (toggled != GetEnhancedBool("multichoice_squares"));
+		}) | rpl::start_with_next([=](bool toggled) {
+			SetEnhancedValue("multichoice_squares", toggled);
+			EnhancedSettings::Write();
+			Core::Restart();
+		}, container->lifetime());
+
+		AddButtonWithIcon(
+				inner,
 				tr::lng_settings_show_repeater_option(),
 				st::settingsButtonNoIcon
 		)->toggleOn(

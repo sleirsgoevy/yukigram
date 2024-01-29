@@ -329,6 +329,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("force_mobile"), false);
 		settings.insert(qsl("disable_recent_stickers_limit"), false);
 		settings.insert(qsl("show_similar_on_joined"), false);
+		settings.insert(qsl("multichoice_squares"), true);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -386,6 +387,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("force_mobile"), GetEnhancedBool("force_mobile"));
 		settings.insert(qsl("disable_recent_stickers_limit"), GetEnhancedBool("disable_recent_stickers_limit"));
 		settings.insert(qsl("show_similar_on_joined"), GetEnhancedBool("show_similar_on_joined"));
+		settings.insert(qsl("multichoice_squares"), GetEnhancedBool("multichoice_squares"));
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
