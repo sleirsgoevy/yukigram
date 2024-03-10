@@ -234,6 +234,21 @@ namespace Settings {
 
 		AddButtonWithIcon(
 				inner,
+				tr::lng_settings_more_right_action_comments(),
+				st::settingsAttentionButton
+		)->toggleOn(
+				rpl::single(GetEnhancedBool("more_right_action_comments"))
+		)->toggledChanges(
+		) | rpl::filter([=](bool toggled) {
+			return (toggled != GetEnhancedBool("more_right_action_comments"));
+		}) | rpl::start_with_next([=](bool toggled) {
+			SetEnhancedValue("more_right_action_comments", toggled);
+			EnhancedSettings::Write();
+			Core::Restart();
+		}, container->lifetime());
+
+		AddButtonWithIcon(
+				inner,
 				tr::lng_settings_show_repeater_option(),
 				st::settingsButtonNoIcon
 		)->toggleOn(

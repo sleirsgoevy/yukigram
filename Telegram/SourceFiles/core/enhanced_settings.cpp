@@ -331,6 +331,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("disable_recent_stickers_limit"), false);
 		settings.insert(qsl("show_similar_on_joined"), false);
 		settings.insert(qsl("multichoice_squares"), true);
+		settings.insert(qsl("more_right_action_comments"), false);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -390,6 +391,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("disable_recent_stickers_limit"), GetEnhancedBool("disable_recent_stickers_limit"));
 		settings.insert(qsl("show_similar_on_joined"), GetEnhancedBool("show_similar_on_joined"));
 		settings.insert(qsl("multichoice_squares"), GetEnhancedBool("multichoice_squares"));
+		settings.insert(qsl("more_right_action_comments"), GetEnhancedBool("more_right_action_comments"));
 
 		auto document = QJsonDocument();
 		document.setObject(settings);

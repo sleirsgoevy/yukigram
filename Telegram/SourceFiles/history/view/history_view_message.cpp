@@ -578,7 +578,7 @@ void Message::animateReaction(Ui::ReactionFlyAnimationArgs &&args) {
 		auto mediaOnTop = (mediaDisplayed && media->isBubbleTop()) || (entry && entry->isBubbleTop());
 
 		auto inner = g;
-		if (_comments) {
+		if (_comments && !displayRightActionComments()) {
 			inner.setHeight(inner.height() - st::historyCommentsButtonHeight);
 		}
 		auto trect = inner.marginsRemoved(st::msgPadding);
@@ -969,7 +969,7 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 	const auto customHighlight = mediaDisplayed && media->customHighlight();
 	if (!mediaSelectionIntervals.empty() || customHighlight) {
 		auto localMediaBottom = g.top() + g.height();
-		if (data()->repliesAreComments() || data()->externalReply()) {
+		if ((data()->repliesAreComments() || data()->externalReply()) && !displayRightActionComments()) {
 			localMediaBottom -= st::historyCommentsButtonHeight;
 		}
 		if (_viewButton) {
@@ -1297,6 +1297,9 @@ void Message::paintCommentsButton(
 		QRect &g,
 		const PaintContext &context) const {
 	if (!data()->repliesAreComments() && !data()->externalReply()) {
+		return;
+	}
+	if (displayRightActionComments()) {
 		return;
 	}
 	if (!_comments) {
@@ -1762,7 +1765,7 @@ PointState Message::pointState(QPoint point) const {
 			// Entry page is always a bubble bottom.
 			auto mediaOnBottom = (mediaDisplayed && media->isBubbleBottom()) || (entry/* && entry->isBubbleBottom()*/);
 
-			if (item->repliesAreComments() || item->externalReply()) {
+			if ((item->repliesAreComments() || item->externalReply()) && !displayRightActionComments()) {
 				g.setHeight(g.height() - st::historyCommentsButtonHeight);
 			}
 
@@ -1972,7 +1975,7 @@ BottomRippleMask Message::bottomRippleMask(int buttonHeight) const {
 }
 
 void Message::createCommentsButtonRipple() {
-	auto mask = bottomRippleMask(st::historyCommentsButtonHeight);
+	auto mask = bottomRippleMask(displayRightActionComments() ? 0 : st::historyCommentsButtonHeight);
 	_comments->ripple = std::make_unique<Ui::RippleAnimation>(
 		st::defaultRippleAnimation,
 		std::move(mask.image),
@@ -3429,9 +3432,7 @@ bool Message::displayRightActionComments() const {
 	return !isPinnedContext()
 		&& (context() != Context::SavedSublist)
 		&& data()->repliesAreComments()
-		&& media()
-		&& media()->isDisplayed()
-		&& !hasBubble();
+		&& (media() && media()->isDisplayed() && !hasBubble() || GetEnhancedBool("more_right_action_comments"));
 }
 
 std::optional<QSize> Message::rightActionSize() const {
@@ -4084,7 +4085,7 @@ int Message::resizeContentGetHeight(int newWidth) {
 			newHeight += (bottomInfoHeight - st::msgDateFont->height);
 		}
 
-		if (item->repliesAreComments() || item->externalReply()) {
+		if ((item->repliesAreComments() || item->externalReply()) && !displayRightActionComments()) {
 			newHeight += st::historyCommentsButtonHeight;
 		} else if (_comments) {
 			_comments = nullptr;

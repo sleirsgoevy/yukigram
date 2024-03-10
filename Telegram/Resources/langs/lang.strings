@@ -4950,3 +4950,4 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_settings_disable_recent_stickers_limit" = "Disable the recent stickers limit";
 "lng_settings_show_similar_on_joined" = "Show similar channels on join message";
 "lng_settings_multichoice_squares" = "Use squares for multichoice polls";
+"lng_settings_more_right_action_comments" = "Move comments button to the right";
