@@ -9,6 +9,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "mtproto/sender.h"
 
+namespace base::Platform {
+class SystemMediaControls;
+} // namespace base::Platform
+
 namespace crl {
 class semaphore;
 } // namespace crl
@@ -170,6 +174,9 @@ private:
 	const std::unique_ptr<Group::StartRtmpProcess> _startWithRtmp;
 
 	base::flat_set<std::unique_ptr<crl::semaphore>> _asyncWaiters;
+
+	const std::unique_ptr<base::Platform::SystemMediaControls> _controls;
+	rpl::lifetime _lifetime;
 
 };
 

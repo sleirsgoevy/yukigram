@@ -332,6 +332,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("show_similar_on_joined"), false);
 		settings.insert(qsl("multichoice_squares"), true);
 		settings.insert(qsl("more_right_action_comments"), false);
+		settings.insert(qsl("mpris_call_hangup"), false);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -392,6 +393,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("show_similar_on_joined"), GetEnhancedBool("show_similar_on_joined"));
 		settings.insert(qsl("multichoice_squares"), GetEnhancedBool("multichoice_squares"));
 		settings.insert(qsl("more_right_action_comments"), GetEnhancedBool("more_right_action_comments"));
+		settings.insert(qsl("mpris_call_hangup"), GetEnhancedBool("mpris_call_hangup"));
 
 		auto document = QJsonDocument();
 		document.setObject(settings);

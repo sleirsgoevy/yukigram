@@ -568,6 +568,21 @@ namespace Settings {
 			EnhancedSettings::Write();
 		}, container->lifetime());
 
+		// TODO YULIA
+		AddButtonWithIcon(
+				container,
+				tr::lng_settings_mpris_call_hangup(),
+				st::settingsButtonNoIcon
+		)->toggleOn(
+				rpl::single(GetEnhancedBool("mpris_call_hangup"))
+		)->toggledValue(
+		) | rpl::filter([](bool enabled) {
+			return (enabled != GetEnhancedBool("mpris_call_hangup"));
+		}) | rpl::start_with_next([=](bool enabled) {
+			SetEnhancedValue("mpris_call_hangup", enabled);
+			EnhancedSettings::Write();
+		}, container->lifetime());
+
 		AddSkip(container);
 	}
 
