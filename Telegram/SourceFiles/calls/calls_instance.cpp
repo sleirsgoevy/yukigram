@@ -246,7 +246,7 @@ Instance::Instance()
 		_controls->setTitle("Group call");
 
 		const auto &peer = current_call->peer();
-		set_artist(peer->userName(), peer->id, peer->name());
+		set_artist(peer->username(), peer->id, peer->name());
 
 	}, _lifetime);
 }

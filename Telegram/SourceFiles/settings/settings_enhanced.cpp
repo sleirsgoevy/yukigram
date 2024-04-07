@@ -54,14 +54,14 @@ namespace Settings {
 		AddSkip(inner);
 		AddSubsectionTitle(inner, tr::lng_settings_network());
 
-		AddButtonWithLabel(
-				inner,
-				tr::lng_settings_net_upload_speed_boost(),
-				rpl::single(NetBoostBox::BoostLabel(GetEnhancedInt("net_speed_boost"))),
-				st::settingsAttentionButton
-		)->addClickHandler([=] {
-			Ui::show(Box<NetBoostBox>());
-		});
+		// AddButtonWithLabel(
+		// 		inner,
+		// 		tr::lng_settings_net_upload_speed_boost(),
+		// 		rpl::single(NetBoostBox::BoostLabel(GetEnhancedInt("net_speed_boost"))),
+		// 		st::settingsAttentionButton
+		// )->addClickHandler([=] {
+		// 	Ui::show(Box<NetBoostBox>());
+		// });
 
 		AddButtonWithIcon(
 				inner,
