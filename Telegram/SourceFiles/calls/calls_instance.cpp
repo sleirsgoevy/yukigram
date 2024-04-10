@@ -211,8 +211,8 @@ Instance::Instance()
 		}
 	};
 
-	const auto set_artist = [=](const QString &username, const PeerId id, const QString &displayname) {
-		_controls->setArtist(QString("%1 -- %2").arg(displayname).arg(format_peer_link(username, id)));
+	const auto set_title = [=](const QString &username, const PeerId id, const QString &displayname) {
+		_controls->setTitle(QString("%1 -- %2").arg(displayname).arg(format_peer_link(username, id)));
 	};
 
 	const auto setup_controls = [=](bool enabled) {
@@ -223,6 +223,16 @@ Instance::Instance()
 		_controls->setIsStopEnabled(true);
 	};
 
+	const auto update_call_state = [=](Call::State state) {
+		if (state == Call::State::WaitingUserConfirmation || state == Call::State::Busy) {
+			_controls->setPlaybackStatus(base::Platform::SystemMediaControls::PlaybackStatus::Stopped);
+		} else if (state == Call::State::ExchangingKeys || state == Call::State::Established) {
+			_controls->setPlaybackStatus(base::Platform::SystemMediaControls::PlaybackStatus::Playing);
+		} else {
+			_controls->setPlaybackStatus(base::Platform::SystemMediaControls::PlaybackStatus::Paused);
+		}
+	};
+
 	currentCallValue() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::start_with_next([=](Call *current_call) {
 		setup_controls(current_call);
 		if (!current_call) {
@@ -230,11 +240,13 @@ Instance::Instance()
 		}
 
 		const bool isIncoming = current_call->type() == Call::Type::Incoming;
-		_controls->setTitle(isIncoming ? "Incoming call" : "Outgoing call");
+		_controls->setArtist(isIncoming ? "Incoming call" : "Outgoing call");
 
 		const auto &user = current_call->user();
-		set_artist(user->username(), user->id, user->firstName);
+		set_title(user->username(), user->id, user->firstName);
+		update_call_state(current_call->state());
 
+		current_call->stateValue() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::start_with_next(update_call_state, current_call->lifetime());
 	}, _lifetime);
 
 	currentGroupCallValue() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::start_with_next([=](GroupCall *current_call) {
@@ -243,10 +255,11 @@ Instance::Instance()
 			return;
 		}
 
-		_controls->setTitle("Group call");
+		_controls->setArtist("Group call");
 
 		const auto &peer = current_call->peer();
-		set_artist(peer->username(), peer->id, peer->name());
+		set_title(peer->username(), peer->id, peer->name());
+		_controls->setPlaybackStatus(base::Platform::SystemMediaControls::PlaybackStatus::Playing);
 
 	}, _lifetime);
 }
