@@ -565,7 +565,7 @@ bool ResolveUsernameOrPhone(
 		.phone = phone,
 		.messageId = post,
 		.storyId = storyId,
-		.text = params.value(u"text"_q),
+		.text = params.value(u"text"_q).replace(u"@"_q, u"@\\"_q),
 		.repliesInfo = commentId
 			? Window::RepliesByLinkInfo{
 				Window::CommentId{ commentId }
