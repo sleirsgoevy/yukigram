@@ -333,6 +333,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("multichoice_squares"), true);
 		settings.insert(qsl("more_right_action_comments"), false);
 		settings.insert(qsl("mpris_call_hangup"), false);
+		settings.insert(qsl("recent_display_limit"), 20);
 
 		auto document = QJsonDocument();
 		document.setObject(settings);
@@ -394,6 +395,7 @@ namespace EnhancedSettings {
 		settings.insert(qsl("multichoice_squares"), GetEnhancedBool("multichoice_squares"));
 		settings.insert(qsl("more_right_action_comments"), GetEnhancedBool("more_right_action_comments"));
 		settings.insert(qsl("mpris_call_hangup"), GetEnhancedBool("mpris_call_hangup"));
+		settings.insert(qsl("recent_display_limit"), GetEnhancedInt("recent_display_limit"));
 
 		auto document = QJsonDocument();
 		document.setObject(settings);

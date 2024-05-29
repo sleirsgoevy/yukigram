@@ -83,6 +83,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/abstract_box.h"
 
 #include <QtCore/QMimeData>
+#include <QtGui/QTextBlock>
 #include <QtWidgets/QScrollBar>
 #include <QtWidgets/QTextEdit>
 
@@ -97,6 +98,15 @@ base::options::toggle OptionForumHideChatsList({
 	.name = "Hide chats list in forums",
 	.description = "Don't keep a narrow column of chats list.",
 });
+
+[[nodiscard]] bool RedirectTextToSearch(const QString &text) {
+	for (const auto &ch : text) {
+		if (ch.unicode() >= 32) {
+			return true;
+		}
+	}
+	return false;
+}
 
 } // namespace
 
@@ -357,6 +367,14 @@ Widget::Widget(
 		Ui::PostponeCall(this, [=] { listScrollUpdated(); });
 	}, lifetime());
 
+	setAttribute(Qt::WA_InputMethodEnabled);
+	controller->widget()->imeCompositionStarts(
+	) | rpl::filter([=] {
+		return redirectImeToSearch();
+	}) | rpl::start_with_next([=] {
+		_search->setFocusFast();
+	}, lifetime());
+
 	_search->changes(
 	) | rpl::start_with_next([=] {
 		applySearchUpdate();
@@ -446,7 +464,6 @@ Widget::Widget(
 		loadMoreBlockedByDate();
 	}, lifetime());
 
-	_search->setFocusPolicy(Qt::StrongFocus);
 	_search->customUpDown(true);
 
 	updateJumpToDateVisibility(true);
@@ -566,14 +583,6 @@ void Widget::chosenRow(const ChosenRow &row) {
 				history,
 				ShowAtUnreadMsgId,
 				Window::SectionShow::Way::ClearStack);
-		} else if (!controller()->adaptive().isOneColumn()) {
-			const auto item = history->chatListMessage();
-			if (const auto topic = item ? item->topic() : nullptr) {
-				controller()->showThread(
-					topic,
-					ShowAtUnreadMsgId,
-					Window::SectionShow::Way::ClearStack);
-			}
 		}
 		return;
 	} else if (history) {
@@ -1025,6 +1034,7 @@ void Widget::setupShortcuts() {
 	) | rpl::filter([=] {
 		return isActiveWindow()
 			&& Ui::InFocusChain(this)
+			&& !_childList
 			&& !controller()->isLayerShown()
 			&& !controller()->window().locked();
 	}) | rpl::start_with_next([=](not_null<Shortcuts::Request*> request) {
@@ -1036,7 +1046,9 @@ void Widget::setupShortcuts() {
 					const auto history = forum->history();
 					controller()->searchInChat(history);
 					return true;
-				} else if (!_openedFolder && _search->isVisible()) {
+				} else if (!_openedFolder
+					&& !_childList
+					&& _search->isVisible()) {
 					_search->setFocus();
 					return true;
 				}
@@ -1193,13 +1205,16 @@ void Widget::updateSuggestions(anim::type animated) {
 		} else {
 			_suggestions = nullptr;
 			_hidingSuggestions.clear();
+			storiesExplicitCollapse();
+			updateStoriesVisibility();
 			_scroll->show();
 		}
 	} else if (suggest && !_suggestions) {
 		if (animated == anim::type::normal) {
 			startWidthAnimation();
-			updateStoriesVisibility();
 		}
+		// Hides stories and passcode lock.
+		updateStoriesVisibility();
 		_suggestions = std::make_unique<Suggestions>(
 			this,
 			controller(),
@@ -1538,16 +1553,17 @@ void Widget::checkUpdateStatus() {
 	updateControlsGeometry();
 }
 
-void Widget::setInnerFocus() {
+void Widget::setInnerFocus(bool unfocusSearch) {
 	if (_childList) {
 		_childList->setInnerFocus();
 	} else if ((_openedFolder || _openedForum)
 		&& _subsectionTopBar->searchSetFocus()) {
 		return;
-	} else if (!_search->getLastText().isEmpty()
-		|| _searchInChat
-		|| _searchHasFocus
-		|| _searchSuggestionsLocked) {
+	} else if (!unfocusSearch
+		&& (!_search->getLastText().isEmpty()
+			|| _searchInChat
+			|| _searchHasFocus
+			|| _searchSuggestionsLocked)) {
 		_search->setFocus();
 	} else {
 		setFocus();
@@ -2566,14 +2582,17 @@ void Widget::dragMoveEvent(QDragMoveEvent *e) {
 		} else {
 			_chooseByDragTimer.callOnce(ChoosePeerByDragTimeout);
 		}
-		if (_inner->updateFromParentDrag(mapToGlobal(e->pos()))) {
-			e->setDropAction(Qt::CopyAction);
-		} else {
-			e->setDropAction(Qt::IgnoreAction);
-		}
+		const auto global = mapToGlobal(e->pos());
+		const auto thread = _suggestions
+			? _suggestions->updateFromParentDrag(global)
+			: _inner->updateFromParentDrag(global);
+		e->setDropAction(thread ? Qt::CopyAction : Qt::IgnoreAction);
 	} else {
 		if (_dragForward) {
 			updateDragInScroll(false);
+		}
+		if (_suggestions) {
+			_suggestions->dragLeft();
 		}
 		_inner->dragLeft();
 		e->setDropAction(Qt::IgnoreAction);
@@ -2586,6 +2605,9 @@ void Widget::dragLeaveEvent(QDragLeaveEvent *e) {
 		updateDragInScroll(false);
 	} else {
 		_chooseByDragTimer.cancel();
+	}
+	if (_suggestions) {
+		_suggestions->dragLeft();
 	}
 	_inner->dragLeft();
 	e->accept();
@@ -2605,8 +2627,11 @@ void Widget::updateDragInScroll(bool inScroll) {
 void Widget::dropEvent(QDropEvent *e) {
 	_chooseByDragTimer.cancel();
 	if (_scroll->geometry().contains(e->pos())) {
-		const auto point = mapToGlobal(e->pos());
-		if (const auto thread = _inner->updateFromParentDrag(point)) {
+		const auto globalPosition = mapToGlobal(e->pos());
+		const auto thread = _suggestions
+			? _suggestions->updateFromParentDrag(globalPosition)
+			: _inner->updateFromParentDrag(globalPosition);
+		if (thread) {
 			e->setDropAction(Qt::CopyAction);
 			e->accept();
 			controller()->content()->filesOrForwardDrop(
@@ -2689,8 +2714,9 @@ void Widget::updateForceDisplayWide() {
 void Widget::showForum(
 		not_null<Data::Forum*> forum,
 		const Window::SectionShow &params) {
+	const auto nochat = !controller()->mainSectionShown();
 	if (!params.childColumn
-		|| !Core::App().settings().dialogsWidthRatio()
+		|| (Core::App().settings().dialogsWidthRatio(nochat) == 0.)
 		|| (_layout != Layout::Main)
 		|| OptionForumHideChatsList.value()) {
 		changeOpenedForum(forum, params.animated);
@@ -2741,6 +2767,7 @@ void Widget::openChildList(
 		*opacity = value;
 		update();
 		_inner->update();
+		_search->setVisible(value < 1.);
 		if (!value && _childListShadow.get() != shadow) {
 			delete shadow;
 		}
@@ -2906,7 +2933,7 @@ bool Widget::setSearchInChat(
 	if (_searchInChat || !_search->getLastText().isEmpty()) {
 		_search->setFocus();
 	} else {
-		setFocus();
+		setInnerFocus(true);
 	}
 	updateForceDisplayWide();
 	return true;
@@ -3287,6 +3314,10 @@ void Widget::keyPressEvent(QKeyEvent *e) {
 		//} else {
 		//	e->ignore();
 		//}
+	} else if ((e->key() == Qt::Key_Backspace || e->key() == Qt::Key_Tab)
+		&& _searchHasFocus
+		&& !_searchInChat) {
+		escape();
 	} else if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
 		submit();
 	} else if (_suggestions
@@ -3327,16 +3358,47 @@ void Widget::keyPressEvent(QKeyEvent *e) {
 	}
 }
 
+void Widget::inputMethodEvent(QInputMethodEvent *e) {
+	const auto cursor = _search->rawTextEdit()->textCursor();
+	bool isGettingInput = !e->commitString().isEmpty()
+		|| e->preeditString() != cursor.block().layout()->preeditAreaText()
+		|| e->replacementLength() > 0;
+
+	if (!isGettingInput || _postponeProcessSearchFocusChange) {
+		Window::AbstractSectionWidget::inputMethodEvent(e);
+		return;
+	}
+
+	// This delay in search focus processing allows us not to create
+	// _suggestions in case the event inserts some non-whitespace search
+	// query while still show _suggestions animated, if it is a space.
+	_postponeProcessSearchFocusChange = true;
+	_search->setFocusFast();
+	QCoreApplication::sendEvent(_search->rawTextEdit(), e);
+	_postponeProcessSearchFocusChange = false;
+	processSearchFocusChange();
+}
+
+QVariant Widget::inputMethodQuery(Qt::InputMethodQuery query) const {
+	return _search->rawTextEdit()->inputMethodQuery(query);
+}
+
+bool Widget::redirectToSearchPossible() const {
+	return !_openedFolder
+		&& !_openedForum
+		&& !_childList
+		&& _search->isVisible()
+		&& !_search->hasFocus()
+		&& hasFocus();
+}
+
 bool Widget::redirectKeyToSearch(QKeyEvent *e) const {
-	if (_openedFolder
-		|| _openedForum
-		|| !_search->isVisible()
-		|| _search->hasFocus()) {
+	if (!redirectToSearchPossible()) {
 		return false;
 	}
 	const auto character = !(e->modifiers() & ~Qt::ShiftModifier)
 		&& (e->key() != Qt::Key_Shift)
-		&& !e->text().isEmpty();
+		&& RedirectTextToSearch(e->text());
 	if (character) {
 		return true;
 	} else if (e != QKeySequence::Paste) {
@@ -3350,6 +3412,10 @@ bool Widget::redirectKeyToSearch(QKeyEvent *e) const {
 		: QClipboard::Clipboard;
 	const auto data = QGuiApplication::clipboard()->mimeData(pasteMode);
 	return data && data->hasText();
+}
+
+bool Widget::redirectImeToSearch() const {
+	return redirectToSearchPossible();
 }
 
 void Widget::paintEvent(QPaintEvent *e) {
@@ -3460,7 +3526,7 @@ bool Widget::cancelSearch() {
 	if (!clearingQuery
 		&& _subsectionTopBar
 		&& _subsectionTopBar->toggleSearch(false, anim::type::normal)) {
-		setFocus();
+		setInnerFocus(true);
 		clearingInChat = true;
 	}
 	const auto clearSearchFocus = !_searchInChat
@@ -3471,7 +3537,7 @@ bool Widget::cancelSearch() {
 	}
 	if (!_suggestions && clearSearchFocus) {
 		// Don't create suggestions in unfocus case.
-		setFocus();
+		setInnerFocus(true);
 	}
 	_lastSearchPeer = nullptr;
 	_lastSearchId = _lastSearchMigratedId = 0;
@@ -3479,7 +3545,7 @@ bool Widget::cancelSearch() {
 	clearSearchField();
 	applySearchUpdate();
 	if (_suggestions && clearSearchFocus) {
-		setFocus();
+		setInnerFocus(true);
 	}
 	return clearingQuery || clearingInChat || clearSearchFocus;
 }

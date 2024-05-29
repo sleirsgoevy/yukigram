@@ -524,6 +524,10 @@ void CreateModerateMessagesBox(
 				not_null<ChannelData*> c) {
 			p->session().api().deleteAllFromParticipant(c, p);
 		});
+
+		if (GetEnhancedInt("always_delete_for") == 1 || GetEnhancedInt("always_delete_for") == 3) {
+			deleteAll->setChecked(true);
+		}
 	}
 	if (allCanBan) {
 		auto ownedWrap = object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
@@ -678,24 +682,32 @@ void CreateModerateMessagesBox(
 		Ui::AddSkip(container);
 		container->add(std::move(checkboxes));
 
-		handleConfirmation(ban, controller, [=](
-				not_null<PeerData*> peer,
-				not_null<ChannelData*> channel) {
-			if (wrap->toggled()) {
-				Api::ChatParticipants::Restrict(
-					channel,
-					peer,
-					ChatRestrictionsInfo(), // Unused.
-					ChatRestrictionsInfo(getRestrictions(), 0),
-					nullptr,
-					nullptr);
-			} else {
-				channel->session().api().chatParticipants().kick(
-					channel,
-					peer,
-					{ channel->restrictions(), 0 });
+		// Handle confirmation manually.
+		confirms->events() | rpl::start_with_next([=] {
+			if (ban->checked() && controller->collectRequests) {
+				const auto kick = !wrap->toggled();
+				const auto restrictions = getRestrictions();
+				const auto request = [=](
+						not_null<PeerData*> peer,
+						not_null<ChannelData*> channel) {
+					if (!kick) {
+						Api::ChatParticipants::Restrict(
+							channel,
+							peer,
+							ChatRestrictionsInfo(), // Unused.
+							ChatRestrictionsInfo(restrictions, 0),
+							nullptr,
+							nullptr);
+					} else {
+						channel->session().api().chatParticipants().kick(
+							channel,
+							peer,
+							{ channel->restrictions(), 0 });
+					}
+				};
+				sequentiallyRequest(request, controller->collectRequests());
 			}
-		});
+		}, ban->lifetime());
 	}
 
 	const auto close = crl::guard(box, [=] { box->closeBox(); });
@@ -817,7 +829,7 @@ void DeleteChatBox(not_null<Ui::GenericBox*> box, not_null<PeerData*> peer) {
 					: tr::lng_delete_for_everyone_check(
 						tr::now,
 						Ui::Text::WithEntities),
-				false,
+				GetEnhancedInt("always_delete_for") == 2 || GetEnhancedInt("always_delete_for") == 3,
 				st::defaultBoxCheckbox));
 	}();
 

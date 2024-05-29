@@ -1374,7 +1374,7 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupPersonalChannel(
 
 			const auto date = Ui::CreateChild<Ui::FlatLabel>(
 				line,
-				Ui::FormatDialogsDate(ItemDateTime(item)),
+				Ui::FormatDialogsDate(ItemDateTime(item), GetEnhancedBool("show_seconds")),
 				st::infoPersonalChannelDateLabel);
 
 			const auto name = Ui::CreateChild<Ui::FlatLabel>(
@@ -1504,11 +1504,11 @@ object_ptr<Ui::RpWidget> DetailsFiller::setupPersonalChannel(
 			user->session().api().requestMessageData(
 				channel,
 				user->personalChannelMessageId(),
-				[=] {
+				crl::guard(container, [=] {
 					if (const auto i = user->session().data().message(id)) {
 						rebuild(i, anim::type::normal);
 					}
-				});
+				}));
 		}, messageChannelWrap->lifetime());
 	}
 
