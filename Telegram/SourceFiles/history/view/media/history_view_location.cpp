@@ -274,9 +274,15 @@ QSize Location::countOptimalSize() {
 
 	if (_parent->hasBubble()) {
 		if (!_title.isEmpty()) {
+			if (GetEnhancedBool("wide_messages")) {
+				maxWidth = qMax(maxWidth, _title.maxWidth() + st::msgPadding.left() + st::msgPadding.right());
+			}
 			minHeight += qMin(_title.countHeight(maxWidth - st::msgPadding.left() - st::msgPadding.right()), 2 * st::webPageTitleFont->height);
 		}
 		if (!_description.isEmpty()) {
+			if (GetEnhancedBool("wide_messages")) {
+				maxWidth = qMax(maxWidth, _description.maxWidth() + st::msgPadding.left() + st::msgPadding.right());
+			}
 			minHeight += qMin(_description.countHeight(maxWidth - st::msgPadding.left() - st::msgPadding.right()), 3 * st::webPageDescriptionFont->height);
 		}
 		if (!_title.isEmpty() || !_description.isEmpty()) {
@@ -305,11 +311,7 @@ QSize Location::countCurrentSize(int newWidth) {
 		tw = st::maxMediaSize;
 	}
 	auto newHeight = th;
-	if (tw > newWidth) {
-		newHeight = (newWidth * newHeight / tw);
-	} else {
-		newWidth = tw;
-	}
+	newHeight = (newWidth * newHeight / tw);
 	auto minWidth = std::clamp(
 		_parent->minWidthForMedia(),
 		st::minPhotoSize,

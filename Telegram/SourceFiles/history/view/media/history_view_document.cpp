@@ -500,7 +500,9 @@ QSize Document::countOptimalSize() {
 
 	if (auto named = Get<HistoryDocumentNamed>()) {
 		accumulate_max(maxWidth, tleft + named->namew + tright);
-		accumulate_min(maxWidth, st::msgMaxWidth);
+		if (!GetEnhancedBool("wide_messages")) {
+			accumulate_min(maxWidth, st::msgMaxWidth);
+		}
 	}
 	if (voice && voice->transcribe) {
 		maxWidth += st::historyTranscribeSkip

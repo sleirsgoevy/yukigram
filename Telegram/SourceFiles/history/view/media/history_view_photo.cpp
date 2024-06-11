@@ -199,7 +199,10 @@ QSize Photo::countOptimalSize() {
 	if (_parent->hasBubble()) {
 		const auto captionMaxWidth = _parent->textualMaxWidth();
 		const auto maxWithCaption = qMin(st::msgMaxWidth, captionMaxWidth);
-		maxWidth = qMin(qMax(maxWidth, maxWithCaption), st::msgMaxWidth);
+		maxWidth = qMax(maxWidth, maxWithCaption);
+		if (!GetEnhancedBool("wide_messages")) {
+			maxWidth = qMin(maxWidth, st::msgMaxWidth);
+		}
 		minHeight = adjustHeightForLessCrop(
 			dimensions,
 			{ maxWidth, minHeight });

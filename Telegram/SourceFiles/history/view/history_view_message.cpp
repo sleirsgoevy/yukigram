@@ -4192,7 +4192,9 @@ QRect Message::countGeometry() const {
 	//	contentLeft += st::msgPhotoSkip - (hmaxwidth - hwidth);
 	}
 	accumulate_min(contentWidth, maxWidth());
-	accumulate_min(contentWidth, int(_bubbleWidthLimit));
+	if (!GetEnhancedBool("wide_messages")) {
+		accumulate_min(contentWidth, int(_bubbleWidthLimit));
+	}
 	if (mediaWidth < contentWidth) {
 		const auto textualWidth = textualMaxWidth();
 		if (mediaWidth < textualWidth
@@ -4306,7 +4308,9 @@ int Message::resizeContentGetHeight(int newWidth) {
 	}
 	accumulate_min(contentWidth, maxWidth());
 	_bubbleWidthLimit = (GetEnhancedBool("wide_messages") ? 4000 : std::max(st::msgMaxWidth, monospaceMaxWidth()));
-	accumulate_min(contentWidth, int(_bubbleWidthLimit));
+	if (!GetEnhancedBool("wide_messages")) {
+		accumulate_min(contentWidth, int(_bubbleWidthLimit));
+	}
 	if (mediaDisplayed) {
 		media->resizeGetHeight(contentWidth);
 		if (media->width() < contentWidth) {
@@ -4340,7 +4344,7 @@ int Message::resizeContentGetHeight(int newWidth) {
 			_reactions->resizeGetHeight(textWidth);
 		}
 
-		if (contentWidth == maxWidth()) {
+		if (!GetEnhancedBool("wide_messages") && contentWidth == maxWidth()) {
 			if (mediaDisplayed) {
 				if (check) {
 					newHeight += check->resizeGetHeight(contentWidth) + st::mediaInBubbleSkip;
