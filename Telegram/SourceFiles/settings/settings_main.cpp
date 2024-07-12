@@ -512,7 +512,7 @@ void SetupPremium(
 		AddPremiumStar(
 			AddButtonWithLabel(
 				wrap->entity(),
-				tr::lng_credits_summary_title(),
+				tr::lng_settings_credits(),
 				controller->session().creditsValue(
 				) | rpl::map([=](uint64 c) {
 					return c ? Lang::FormatCountToShort(c).string : QString{};
@@ -793,7 +793,7 @@ rpl::producer<QString> Main::title() {
 
 void Main::fillTopBarMenu(const Ui::Menu::MenuCallback &addAction) {
 	const auto &list = Core::App().domain().accounts();
-	if (list.size() < Core::App().domain().maxAccounts()) {
+	if (list.size() < 10) {
 		addAction(tr::lng_menu_add_account(tr::now), [=] {
 			Core::App().domain().addActivated(MTP::Environment{});
 		}, &st::menuIconAddAccount);
