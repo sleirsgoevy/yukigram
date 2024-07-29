@@ -1,0 +1,193 @@
+name: PostmarketOS repository
+
+on:
+  push:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'changelog.txt'
+      - 'LEGAL'
+      - 'LICENSE'
+      - '.github/**'
+      - '!.github/workflows/linux.yml'
+      - 'snap/**'
+      - 'Telegram/build/**'
+      - 'Telegram/Resources/uwp/**'
+      - 'Telegram/Resources/winrc/**'
+      - 'Telegram/SourceFiles/platform/win/**'
+      - 'Telegram/SourceFiles/platform/mac/**'
+      - 'Telegram/Telegram/**'
+      - 'Telegram/configure.bat'
+      - 'Telegram/Telegram.plist'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'changelog.txt'
+      - 'LEGAL'
+      - 'LICENSE'
+      - '.github/**'
+      - '!.github/workflows/linux.yml'
+      - 'snap/**'
+      - 'Telegram/build/**'
+      - 'Telegram/Resources/uwp/**'
+      - 'Telegram/Resources/winrc/**'
+      - 'Telegram/SourceFiles/platform/win/**'
+      - 'Telegram/SourceFiles/platform/mac/**'
+      - 'Telegram/Telegram/**'
+      - 'Telegram/configure.bat'
+      - 'Telegram/Telegram.plist'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+
+  linux:
+    name: PostmarketOS APK builds
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get repository name.
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
+
+      - name: Clone.
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: ${{ env.REPO_NAME }}
+          fetch-depth: 0
+
+      - name: Build packages.
+        env:
+          ABUILD_PRIVATE_KEY: ${{ secrets.ABUILD_PRIVATE_KEY }}
+        run: |
+          sudo apt-get install python3-pip python3-virtualenv
+          virtualenv .
+          . bin/activate
+          pip3 install tomli
+          pip3 install https://gitlab.com/postmarketos/pmbootstrap/-/archive/master.tar.gz
+
+          printf '\n' | pmbootstrap init || true
+
+          sudo rm -rf ~/.local/var/pmbootstrap/config_abuild
+          mkdir ~/.local/var/pmbootstrap/config_abuild
+          echo "$ABUILD_PRIVATE_KEY" > ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa
+          openssl rsa -in ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa -pubout > ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa.pub
+          echo 'PACKAGER_PRIVKEY="/home/pmos/.abuild/yukigram.github.io.rsa"' > ~/.local/var/pmbootstrap/config_abuild/config.abuild
+
+          cat > ~/.config/pmbootstrap.cfg << EOF
+          [pmbootstrap]
+          aports = $HOME/.local/var/pmbootstrap/cache_git/pmaports
+          ccache_size = 5G
+          is_default_channel = False
+          device = qemu-amd64
+          extra_packages =
+          hostname = localhost
+          build_pkgs_on_install = True
+          jobs = 5
+          kernel = 
+          keymap =
+          locale = en_US.UTF-8
+          mirror_alpine = http://dl-cdn.alpinelinux.org/alpine/
+          mirrors_postmarketos = http://mirror.postmarketos.org/postmarketos/
+          nonfree_firmware = True
+          nonfree_userland = False
+          ssh_keys = False
+          ssh_key_glob = ~/.ssh/id_*.pub
+          timezone = Europe/Moscow
+          ui = xfce4
+          ui_extras = False
+          user = $(whoami)
+          work = $HOME/.local/var/pmbootstrap
+          boot_size = 256
+          extra_space = 0
+          sudo_timer = True
+          qemu_redir_stdio = False
+          build_default_device_arch = False
+  
+          [providers]
+          EOF
+
+          pushd "$REPO_NAME"
+          pkgver="$(grep ^AppVersionStrSmall Telegram/build/version | grep -o '[0-9].*')"
+          pkgrel="$(($(git log | grep ^commit | grep -n $(git blame Telegram/build/version | grep 'AppVersionStrSmall[^)]*$' | cut -d ' ' -f 1-1) | cut -d ':' -f 1-1)-1))"
+          popd
+          pmbootstrap pull
+          pmbootstrap aportgen --fork-alpine telegram-desktop
+          ln -s ~/.local/var/pmbootstrap/cache_git/pmaports pmaports
+          mv pmaports/temp/telegram-desktop pmaports/temp/yukigram
+          cat >> pmaports/temp/yukigram/APKBUILD << EOF
+
+          pkgname=yukigram
+          pkgver=$pkgver
+          pkgrel=$pkgrel
+          pkgdesc="Yukigram (Telegram Desktop fork) messaging app"
+          makedepends="\$makedepends glibmm2.68-dev"
+          source="\${source/https:*.tar.gz/yukigram.tar.gz}"
+          builddir="\$srcdir/$REPO_NAME"
+          EOF
+          tar -czf pmaports/temp/yukigram/yukigram.tar.gz "$REPO_NAME"
+
+          mkdir pmaports/temp/yukigram-key
+          cat > pmaports/temp/yukigram-key/APKBUILD << EOF
+          pkgname=yukigram-key
+          pkgver=1
+          pkgrel=0
+          pkgdesc="Public key for the Yukigram repository"
+          url="https://yukigram.github.io"
+          arch="noarch"
+          license="MIT"
+          source="yukigram.github.io.rsa.pub"
+          options="!check"
+
+          package() {
+              install -Dm644 "\$srcdir"/yukigram.github.io.rsa.pub "\$pkgdir"/etc/apk/keys/yukigram.github.io.rsa.pub
+              install -Dm644 "\$srcdir"/yukigram.github.io.rsa.pub "\$pkgdir"/usr/share/apk/keys/yukigram.github.io.rsa.pub
+          }
+          EOF
+          cp ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa.pub pmaports/temp/yukigram-key/
+
+          pmbootstrap checksum yukigram yukigram-key
+          pmbootstrap --details-to-stdout build --arch=aarch64 yukigram
+          pmbootstrap --details-to-stdout build --arch=armv7 yukigram
+          pmbootstrap build yukigram-key
+
+          mkdir -p website
+          cp -r ~/.local/var/pmbootstrap/packages website/packages
+          cp ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa.pub website/
+          cat > website/index.html << EOF
+          <html>
+          <head>
+          <title>Yukigram builds for PostmarketOS</title>
+          <meta charset="utf-8"/>
+          </head>
+          <body>
+          <h1>Yukigram builds for PostmarketOS</h1>
+          <h2>Repository installation (preferred)</h2>
+          <p>Run these commands as root to install Yukigram to your PostmarketOS device:</p>
+          <pre>wget https://yukigram.github.io/yukigram.github.io.rsa.pub -O /etc/apk/keys/yukigram.github.io.rsa.pub
+          echo https://yukigram.github.io/packages/edge &gt;&gt; /etc/apk/repositories
+          apk update
+          apk add yukigram yukigram-key
+          </pre>
+          <h2>Direct APK downloads</h2>
+          <p>It is recommended that you add the repository to your device as described above. This way you will get automatic updates. If you still want to install the APK manually, here are the links:</p>
+          <ul>
+          <li><a href="packages/edge/aarch64/yukigram-$pkgver-r$pkgrel.apk">aarch64 (64-bit ARMv8)</a></li>
+          <li><a href="packages/edge/armv7/yukigram-$pkgver-r$pkgrel.apk">armv7 (32-bit ARMv7)</a></li>
+          </ul>
+          </body>
+          </html>
+          EOF
+
+      - uses: actions/upload-pages-artifact@v3.0.1
+        name: Upload artifact.
+        with:
+          path: website
+
+      - name: Deploy GitHub Pages site
+        if: github.ref == 'refs/heads/dev'
+        uses: actions/deploy-pages@v4.0.5
