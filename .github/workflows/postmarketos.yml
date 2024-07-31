@@ -168,8 +168,8 @@ jobs:
           <h1>Yukigram builds for PostmarketOS</h1>
           <h2>Repository installation (preferred)</h2>
           <p>Run these commands as root to install Yukigram to your PostmarketOS device:</p>
-          <pre>wget https://yukigram.github.io/yukigram.github.io.rsa.pub -O /etc/apk/keys/yukigram.github.io.rsa.pub
-          echo https://yukigram.github.io/packages/edge &gt;&gt; /etc/apk/repositories
+          <pre>wget https://yukigram.github.io/yukigram/yukigram.github.io.rsa.pub -O /etc/apk/keys/yukigram.github.io.rsa.pub
+          echo https://yukigram.github.io/yukigram/packages/edge &gt;&gt; /etc/apk/repositories
           apk update
           apk add yukigram yukigram-key
           </pre>
