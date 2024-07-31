@@ -77,6 +77,8 @@ jobs:
           echo "$ABUILD_PRIVATE_KEY" > ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa
           openssl rsa -in ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa -pubout > ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa.pub
           echo 'PACKAGER_PRIVKEY="/home/pmos/.abuild/yukigram.github.io.rsa"' > ~/.local/var/pmbootstrap/config_abuild/abuild.conf
+          mkdir -p ~/.local/var/pmbootstrap/config_apk_keys
+          sudo cp ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa.pub ~/.local/var/pmbootstrap/config_apk_keys
 
           cat > ~/.config/pmbootstrap.cfg << EOF
           [pmbootstrap]
