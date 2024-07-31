@@ -151,6 +151,7 @@ jobs:
           cp ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa.pub pmaports/temp/yukigram-key/
 
           pmbootstrap checksum yukigram yukigram-key
+          pmbootstrap --details-to-stdout build --arch=x86_64 yukigram
           pmbootstrap --details-to-stdout build --arch=aarch64 yukigram
           pmbootstrap --details-to-stdout build --arch=armv7 yukigram
           pmbootstrap build yukigram-key
@@ -178,6 +179,7 @@ jobs:
           <ul>
           <li><a href="packages/edge/aarch64/yukigram-$pkgver-r$pkgrel.apk">aarch64 (64-bit ARMv8)</a></li>
           <li><a href="packages/edge/armv7/yukigram-$pkgver-r$pkgrel.apk">armv7 (32-bit ARMv7)</a></li>
+          <li><a href="packages/edge/x86_64/yukigram-$pkgver-r$pkgrel.apk">x86_64 (64-bit x86)</a></li>
           </ul>
           </body>
           </html>
