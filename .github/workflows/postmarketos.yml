@@ -76,7 +76,7 @@ jobs:
           mkdir ~/.local/var/pmbootstrap/config_abuild
           echo "$ABUILD_PRIVATE_KEY" > ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa
           openssl rsa -in ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa -pubout > ~/.local/var/pmbootstrap/config_abuild/yukigram.github.io.rsa.pub
-          echo 'PACKAGER_PRIVKEY="/home/pmos/.abuild/yukigram.github.io.rsa"' > ~/.local/var/pmbootstrap/config_abuild/config.abuild
+          echo 'PACKAGER_PRIVKEY="/home/pmos/.abuild/yukigram.github.io.rsa"' > ~/.local/var/pmbootstrap/config_abuild/abuild.conf
 
           cat > ~/.config/pmbootstrap.cfg << EOF
           [pmbootstrap]
