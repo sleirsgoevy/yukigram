@@ -128,6 +128,7 @@ jobs:
           pkgrel=$pkgrel
           pkgdesc="Yukigram (Telegram Desktop fork) messaging app"
           makedepends="\$makedepends glibmm2.68-dev"
+          depends="\$depends ada"
           source="\${source/https:*.tar.gz/yukigram.tar.gz}"
           builddir="\$srcdir/$REPO_NAME"
           EOF
