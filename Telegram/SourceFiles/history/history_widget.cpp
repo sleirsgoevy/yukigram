@@ -5006,7 +5006,14 @@ bool HistoryWidget::updateCmdStartShown() {
 			const auto user = _peer ? _peer->asUser() : nullptr;
 			const auto bot = (user && user->isBot()) ? user : nullptr;
 			if (bot && !bot->botInfo->botMenuButtonUrl.isEmpty()) {
-				session().attachWebView().requestMenu(controller(), bot);
+				session().attachWebView().open({
+					.bot = bot,
+					.context = { .controller = controller() },
+					.button = {
+						.url = bot->botInfo->botMenuButtonUrl.toUtf8(),
+					},
+					.source = InlineBots::WebViewSourceBotMenu(),
+				});
 			} else if (!_fieldAutocomplete->isHidden()) {
 				_fieldAutocomplete->hideAnimated();
 			} else {
@@ -6841,9 +6848,16 @@ void HistoryWidget::keyPressEvent(QKeyEvent *e) {
 		}
 	} else if (e->key() == Qt::Key_O && e->modifiers() == Qt::ControlModifier) {
 		chooseAttach();
+	} else if (e->key() == Qt::Key_Control) {
+		_list->repaint();
+		e->ignore();
 	} else {
 		e->ignore();
 	}
+}
+
+void HistoryWidget::keyReleaseEvent(QKeyEvent *e) {
+	_list->repaint();
 }
 
 void HistoryWidget::handlePeerMigration() {
