@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/data_peer.h"
 
+#include "api/api_sensitive_content.h"
 #include "data/data_user.h"
 #include "data/data_chat.h"
 #include "data/data_chat_participant_status.h"
@@ -50,6 +51,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "storage/file_download.h"
 #include "storage/storage_facade.h"
 #include "storage/storage_shared_media.h"
+#include <QRandomGenerator>
 
 namespace {
 
@@ -57,6 +59,11 @@ constexpr auto kUpdateFullPeerTimeout = crl::time(5000); // Not more than once i
 constexpr auto kUserpicSize = 160;
 
 using UpdateFlag = Data::PeerUpdate::Flag;
+
+[[nodiscard]] const std::vector<QString> &IgnoredReasons(
+		not_null<Main::Session*> session) {
+	return session->appConfig().ignoredRestrictionReasons();
+}
 
 } // namespace
 
@@ -72,6 +79,62 @@ PeerId FakePeerIdForJustName(const QString &name) {
 		? 777
 		: base::crc32(name.constData(), name.size() * sizeof(QChar));
 	return peerFromUser(kShift + std::abs(base));
+}
+
+bool UnavailableReason::sensitive() const {
+	return reason == u"sensitive"_q;
+}
+
+UnavailableReason UnavailableReason::Sensitive() {
+	return { u"sensitive"_q };
+}
+
+QString UnavailableReason::Compute(
+		not_null<Main::Session*> session,
+		const std::vector<UnavailableReason> &list) {
+	const auto &skip = IgnoredReasons(session);
+	auto &&filtered = ranges::views::all(
+		list
+	) | ranges::views::filter([&](const Data::UnavailableReason &reason) {
+		return !reason.sensitive()
+			&& !ranges::contains(skip, reason.reason);
+	});
+	const auto first = filtered.begin();
+	return (first != filtered.end()) ? first->text : QString();
+}
+
+bool UnavailableReason::IgnoreSensitiveMark(
+		not_null<Main::Session*> session) {
+	return ranges::contains(
+			IgnoredReasons(session),
+			UnavailableReason::Sensitive().reason);
+}
+
+// We should get a full restriction in "{full}: {reason}" format and we
+// need to find an "-all" tag in {full}, otherwise ignore this restriction.
+std::vector<UnavailableReason> UnavailableReason::Extract(
+		const MTPvector<MTPRestrictionReason> *list) {
+	if (!list) {
+		return {};
+	}
+	return ranges::views::all(
+		list->v
+	) | ranges::views::filter([](const MTPRestrictionReason &restriction) {
+		return restriction.match([&](const MTPDrestrictionReason &data) {
+			const auto platform = data.vplatform().v;
+			return false
+#ifdef OS_MAC_STORE
+				|| (platform == "ios"_q)
+#elif defined OS_WIN_STORE // OS_MAC_STORE
+				|| (platform == "ms"_q)
+#endif // OS_MAC_STORE || OS_WIN_STORE
+				|| (platform == "all"_q);
+		});
+	}) | ranges::views::transform([](const MTPRestrictionReason &restriction) {
+		return restriction.match([&](const MTPDrestrictionReason &data) {
+			return UnavailableReason{ qs(data.vreason()), qs(data.vtext()) };
+		});
+	}) | ranges::to_vector;
 }
 
 bool ApplyBotMenuButton(
@@ -95,28 +158,22 @@ bool ApplyBotMenuButton(
 	return changed;
 }
 
-bool operator<(
-		const AllowedReactions &a,
-		const AllowedReactions &b) {
-	return (a.type < b.type) || ((a.type == b.type) && (a.some < b.some));
-}
-
-bool operator==(
-		const AllowedReactions &a,
-		const AllowedReactions &b) {
-	return (a.type == b.type)
-		&& (a.some == b.some)
-		&& (a.maxCount == b.maxCount);
-}
-
-AllowedReactions Parse(const MTPChatReactions &value) {
+AllowedReactions Parse(
+		const MTPChatReactions &value,
+		int maxCount,
+		bool paidEnabled) {
 	return value.match([&](const MTPDchatReactionsNone &) {
-		return AllowedReactions();
+		return AllowedReactions{
+			.maxCount = maxCount,
+			.paidEnabled = paidEnabled,
+		};
 	}, [&](const MTPDchatReactionsAll &data) {
 		return AllowedReactions{
+			.maxCount = maxCount,
 			.type = (data.is_allow_custom()
 				? AllowedReactionsType::All
 				: AllowedReactionsType::Default),
+			.paidEnabled = paidEnabled,
 		};
 	}, [&](const MTPDchatReactionsSome &data) {
 		return AllowedReactions{
@@ -125,7 +182,9 @@ AllowedReactions Parse(const MTPChatReactions &value) {
 			) | ranges::views::transform(
 				ReactionFromMTP
 			) | ranges::to_vector,
+			.maxCount = maxCount,
 			.type = AllowedReactionsType::Some,
+			.paidEnabled = paidEnabled,
 		};
 	});
 }
@@ -233,6 +292,10 @@ void PeerData::updateNameDelayed(
 	_name = newName;
 	invalidateEmptyUserpic();
 
+	if (_randomNumber == 0) {
+		_randomNumber = QRandomGenerator::global()->bounded(10000000);
+	}
+
 	auto flags = UpdateFlag::None | UpdateFlag::None;
 	auto oldFirstLetters = base::flat_set<QChar>();
 	const auto nameUpdated = (_nameVersion++ > 1);
@@ -267,7 +330,7 @@ void PeerData::updateNameDelayed(
 }
 
 not_null<Ui::EmptyUserpic*> PeerData::ensureEmptyUserpic() const {
-	if (!_userpicEmpty) {
+	if (!_userpicEmpty || GetEnhancedBool("screenshot_mode") != _previousMode) {
 		const auto user = asUser();
 		_userpicEmpty = std::make_unique<Ui::EmptyUserpic>(
 			Ui::EmptyUserpic::UserpicColor(colorIndex()),
@@ -338,11 +401,15 @@ void PeerData::paintUserpic(
 		int y,
 		int size) const {
 	const auto cloud = userpicCloudImage(view);
+	const auto shouldLoad = cloud
+		&& (!GetEnhancedBool("screenshot_mode")
+			|| isVerified()
+			|| isServiceUser());
 	const auto ratio = style::DevicePixelRatio();
 	Ui::ValidateUserpicCache(
 		view,
-		cloud,
-		cloud ? nullptr : ensureEmptyUserpic().get(),
+		shouldLoad ? cloud : nullptr,
+		shouldLoad ? nullptr : ensureEmptyUserpic().get(),
 		size * ratio,
 		isForum());
 	p.drawImage(QRect(x, y, size, size), view.cached);
@@ -501,18 +568,50 @@ auto PeerData::unavailableReasons() const
 }
 
 QString PeerData::computeUnavailableReason() const {
-	const auto &list = unavailableReasons();
-	const auto &config = session().appConfig();
-	const auto skip = config.get<std::vector<QString>>(
-		"ignore_restriction_reasons",
-		std::vector<QString>());
-	auto &&filtered = ranges::views::all(
-		list
-	) | ranges::views::filter([&](const Data::UnavailableReason &reason) {
-		return !ranges::contains(skip, reason.reason);
-	});
-	const auto first = filtered.begin();
-	return (first != filtered.end()) ? first->text : QString();
+	return Data::UnavailableReason::Compute(
+		&session(),
+		unavailableReasons());
+}
+
+bool PeerData::hasSensitiveContent() const {
+	return _sensitiveContent == 1;
+}
+
+void PeerData::setUnavailableReasonsList(
+		std::vector<Data::UnavailableReason> &&reasons) {
+	Unexpected("PeerData::setUnavailableReasonsList.");
+}
+
+void PeerData::setUnavailableReasons(
+		std::vector<Data::UnavailableReason> &&reasons) {
+	const auto i = ranges::find(
+		reasons,
+		true,
+		&Data::UnavailableReason::sensitive);
+	const auto sensitive = (i != end(reasons));
+	if (sensitive) {
+		reasons.erase(i);
+	}
+	auto changed = (sensitive != hasSensitiveContent());
+	if (changed) {
+		setHasSensitiveContent(sensitive);
+	}
+	if (reasons != unavailableReasons()) {
+		setUnavailableReasonsList(std::move(reasons));
+		changed = true;
+	}
+	if (changed) {
+		session().changes().peerUpdated(
+			this,
+			UpdateFlag::UnavailableReason);
+	}
+}
+
+void PeerData::setHasSensitiveContent(bool has) {
+	_sensitiveContent = has ? 1 : 0;
+	if (has) {
+		session().api().sensitiveContent().preload();
+	}
 }
 
 // This is duplicated in CanPinMessagesValue().
@@ -934,6 +1033,29 @@ const QString &PeerData::name() const {
 	if (const auto to = migrateTo()) {
 		return to->name();
 	}
+	if (isLoaded()
+		&& !isServiceUser()
+		&& !isVerified()
+		&& GetEnhancedBool("screenshot_mode")) {
+		if (const auto user = asUser()) {
+			if (user->isInaccessible()) {
+				return _name;
+			}
+		}
+		if (!_fakeName.isEmpty()) {
+			return _fakeName;
+		}
+		return _fakeName.append(isUser()
+				? (asUser()->isBot() ? "Bot " : "User ")
+				: isBroadcast()
+				? "Channel "
+				: isForum()
+				? "Forum "
+				: isMegagroup()
+				? "Group "
+				: "Chat ")
+			.append(QString::number(_randomNumber));
+	}
 	return _name;
 }
 
@@ -1222,9 +1344,12 @@ Data::RestrictionCheckResult PeerData::amRestricted(
 }
 
 bool PeerData::amAnonymous() const {
-	return isBroadcast()
-		|| (isChannel()
-			&& (asChannel()->adminRights() & ChatAdminRight::Anonymous));
+	if (const auto channel = asChannel()) {
+		return channel->isBroadcast()
+			? !channel->signatureProfiles()
+			: (channel->adminRights() & ChatAdminRight::Anonymous);
+	}
+	return false;
 }
 
 bool PeerData::canRevokeFullHistory() const {
