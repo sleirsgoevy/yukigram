@@ -1059,6 +1059,9 @@ void Widget::setupStories() {
 }
 
 void Widget::storiesToggleExplicitExpand(bool expand) {
+	if (GetEnhancedBool("hide_stories")) {
+		return;
+	}
 	if (_storiesExplicitExpand == expand) {
 		return;
 	}
@@ -1399,7 +1402,7 @@ void Widget::changeOpenedFolder(Data::Folder *folder, anim::type animated) {
 		controller()->closeForum();
 		_openedFolder = folder;
 		_inner->changeOpenedFolder(folder);
-		if (_stories) {
+		if (!GetEnhancedBool("hide_stories") && _stories) {
 			storiesExplicitCollapse();
 		}
 	}, (folder != nullptr), animated);
@@ -1697,7 +1700,7 @@ void Widget::raiseWithTooltip() {
 	raise();
 	if (_stories) {
 		Ui::PostponeCall(this, [=] {
-			_stories->raiseTooltip();
+			if (_stories) _stories->raiseTooltip();
 		});
 	}
 }
@@ -1798,6 +1801,9 @@ void Widget::stopWidthAnimation() {
 }
 
 void Widget::updateStoriesVisibility() {
+	if (GetEnhancedBool("hide_stories")) {
+		_stories = nullptr;
+	}
 	updateLockUnlockVisibility();
 	if (!_stories) {
 		return;
@@ -3362,7 +3368,9 @@ void Widget::updateControlsGeometry() {
 	}
 
 	const auto wasScrollTop = _scroll->scrollTop();
-	const auto newScrollTop = (_topDelta < 0 && wasScrollTop <= 0)
+	const auto newScrollTop = (wasScrollTop == 0)
+		? wasScrollTop
+		: (_topDelta < 0 && wasScrollTop <= 0)
 		? wasScrollTop
 		: (wasScrollTop + _topDelta);
 

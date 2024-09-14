@@ -147,13 +147,24 @@ void EditLinkBox(
 		object_ptr<Ui::RpWidget>(content),
 		st::markdownLinkFieldPadding);
 	placeholder->setAttribute(Qt::WA_TransparentForMouseEvents);
+	const auto link = [&] {
+		if (!startLink.trimmed().isEmpty()) {
+			return startLink.trimmed();
+		}
+		const auto clipboard = QGuiApplication::clipboard()->text().trimmed();
+		if (clipboard.startsWith("http://")
+			|| clipboard.startsWith("https://")) {
+			return clipboard;
+		}
+		return QString();
+	}();
 	const auto url = Ui::AttachParentChild(
 		content,
 		object_ptr<Ui::InputField>(
 			content,
 			fieldSt,
 			tr::lng_formatting_link_url(),
-			startLink.trimmed()));
+			link));
 	url->heightValue(
 	) | rpl::start_with_next([placeholder](int height) {
 		placeholder->resize(placeholder->width(), height);
@@ -1089,10 +1100,26 @@ base::unique_qptr<Ui::RpWidget> CreateDisabledFieldView(
 		st::historySendDisabled);
 	label->setAttribute(Qt::WA_TransparentForMouseEvents);
 	raw->setPointerCursor(false);
+
+	const auto &st = st::historyComposeField;
+
+	const auto metrics = QFontMetricsF(st.style.font->f);
+	const auto realAscent = int(base::SafeRound(metrics.ascent()));
+	const auto ascentAdd = st.style.font->ascent - realAscent;
+	const auto customFontMarginTop = ascentAdd;
+	const auto leading = qMax(metrics.leading(), qreal(0.0));
+	const auto adjustment = (metrics.ascent() + leading)
+		- ((st.style.font->height * 4) / 5);
+	const auto placeholderCustomFontSkip = int(base::SafeRound(-adjustment));
+
+	const auto margins = st.textMargins
+		+ st.placeholderMargins
+		+ QMargins(0, style::ConvertScale(4)
+			+ placeholderCustomFontSkip
+			+ customFontMarginTop, 0, 0);
+
 	raw->widthValue(
 	) | rpl::start_with_next([=](int width) {
-		const auto &st = st::historyComposeField;
-		const auto margins = (st.textMargins + st.placeholderMargins);
 		const auto available = width - margins.left() - margins.right();
 		const auto skip = st::historySendDisabledIconSkip;
 		label->resizeToWidth(available - skip);
@@ -1101,8 +1128,6 @@ base::unique_qptr<Ui::RpWidget> CreateDisabledFieldView(
 	raw->paintRequest(
 	) | rpl::start_with_next([=] {
 		auto p = QPainter(raw);
-		const auto &st = st::historyComposeField;
-		const auto margins = (st.textMargins + st.placeholderMargins);
 		const auto &icon = st::historySendDisabledIcon;
 		icon.paint(
 			p,
