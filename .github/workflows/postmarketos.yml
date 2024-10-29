@@ -68,7 +68,7 @@ jobs:
           virtualenv .
           . bin/activate
           pip3 install tomli
-          pip3 install https://gitlab.com/postmarketos/pmbootstrap/-/archive/master.tar.gz
+          pip3 install https://gitlab.postmarketos.org/postmarketOS/pmbootstrap/-/archive/master.tar.gz
 
           printf '\n' | pmbootstrap init || true
 
