@@ -1633,18 +1633,20 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 			const auto o = ScopedPainterOpacity(p, progress);
 			const auto &st = st::msgSelectionCheck;
 			const auto right = delegate()->elementIsChatWide()
-				? (st::msgMaxWidth
-					+ st::msgPhotoSkip
-					+ st::msgSelectionOffset
-					+ st::msgPadding.left()
-					+ st.size)
+				? std::min(
+					int(_bubbleWidthLimit
+						+ st::msgPhotoSkip
+						+ st::msgSelectionOffset
+						+ st::msgPadding.left()
+						+ st.size),
+					width())
 				: width();
 			const auto pos = QPoint(
 				(right
 					- (st::msgSelectionOffset * progress - st.size) / 2
 					- st::msgPadding.right() / 2
 					- st.size),
-				g.y() + (g.height() - st.size) / 2);
+				rect::bottom(g) - st.size - st::msgSelectionBottomSkip);
 			{
 				p.setPen(QPen(st.border, st.width));
 				p.setBrush(context.st->msgServiceBg());
@@ -4424,7 +4426,7 @@ QRect Message::countGeometry() const {
 	}
 
 	// sponsored move to right
-	if (const auto sponsored = data()->isSponsored()) {
+	if (data()->isSponsored()) {
 		contentLeft = st::msgMargin.right() + availableWidth - contentWidth;
 	}
 

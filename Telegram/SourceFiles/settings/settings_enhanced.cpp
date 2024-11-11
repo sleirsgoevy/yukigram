@@ -590,12 +590,6 @@ namespace Settings {
 		AddSkip(container);
 		AddSubsectionTitle(container, tr::lng_settings_other());
 
-		const auto wrap = container->add(
-				object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
-						container,
-						object_ptr<Ui::VerticalLayout>(container)));
-		const auto inner = wrap->entity();
-
 		AddButtonWithIcon(
 			container,
 			tr::lng_settings_hide_all_chats(),
@@ -671,7 +665,7 @@ namespace Settings {
 		}, container->lifetime());
 
 		AddButtonWithIcon(
-				inner,
+				container,
 				tr::lng_settings_force_mobile(),
 				st::settingsButtonNoIcon
 		)->toggleOn(
@@ -686,7 +680,7 @@ namespace Settings {
 		}, container->lifetime());
 
 		AddButtonWithIcon(
-				inner,
+				container,
 				tr::lng_settings_disable_recent_stickers_limit(),
 				st::settingsButtonNoIcon
 		)->toggleOn(

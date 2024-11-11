@@ -11,13 +11,14 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "core/file_utilities.h"
 #include <core/shortcuts.h>
 #include "core/click_handler_types.h"
+#include "core/phone_click_handler.h"
 #include "history/history_item_helpers.h"
 #include "history/view/controls/history_view_forward_panel.h"
-#include "api/api_report.h"
 #include "history/view/controls/history_view_draft_options.h"
 #include "boxes/moderate_messages_box.h"
 #include "history/view/media/history_view_sticker.h"
 #include "history/view/media/history_view_web_page.h"
+#include "history/view/reactions/history_view_reactions.h"
 #include "history/view/reactions/history_view_reactions_button.h"
 #include "history/view/reactions/history_view_reactions_selector.h"
 #include "history/view/history_view_about_view.h"
@@ -38,13 +39,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/effects/path_shift_gradient.h"
 #include "ui/effects/message_sending_animation_controller.h"
 #include "ui/effects/reaction_fly_animation.h"
-#include "ui/text/text_options.h"
 #include "ui/text/text_entity.h"
 #include "ui/text/text_isolated_emoji.h"
-#include "ui/boxes/confirm_box.h"
 #include "ui/boxes/edit_factcheck_box.h"
 #include "ui/boxes/report_box_graphics.h"
-#include "ui/layers/generic_box.h"
 #include "ui/controls/delete_message_context_action.h"
 #include "ui/inactive_press.h"
 #include "ui/painter.h"
@@ -60,7 +58,6 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/delete_messages_box.h"
 #include "boxes/report_messages_box.h"
 #include "boxes/sticker_set_box.h"
-#include "boxes/premium_preview_box.h"
 #include "boxes/translate_box.h"
 #include "chat_helpers/message_field.h"
 #include "chat_helpers/emoji_interactions.h"
@@ -76,6 +73,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/session/send_as_peers.h"
 #include "mainwidget.h"
 #include "menu/menu_item_download_files.h"
+#include "menu/menu_sponsored.h"
 #include "core/application.h"
 #include "facades.h"
 #include "apiwrap.h"
@@ -140,60 +138,6 @@ int BinarySearchBlocksOrItems(const T &list, int edge) {
 		? Data::CanSendAnything(topic)
 		: (Data::CanSendAnything(peer)
 			&& (!peer->isChannel() || peer->asChannel()->amIn()));
-}
-
-void FillSponsoredMessagesMenu(
-		not_null<Window::SessionController*> controller,
-		FullMsgId itemId,
-		not_null<Ui::PopupMenu*> menu) {
-	const auto &data = controller->session().sponsoredMessages();
-	const auto info = data.lookupDetails(itemId).info;
-	const auto show = controller->uiShow();
-	if (!info.empty()) {
-		auto fillSubmenu = [&](not_null<Ui::PopupMenu*> menu) {
-			const auto allText = ranges::accumulate(
-				info,
-				TextWithEntities(),
-				[](TextWithEntities a, TextWithEntities b) {
-					return a.text.isEmpty() ? b : a.append('\n').append(b);
-				}).text;
-			const auto callback = [=] {
-				QGuiApplication::clipboard()->setText(allText);
-				show->showToast(tr::lng_text_copied(tr::now));
-			};
-			for (const auto &i : info) {
-				auto item = base::make_unique_q<Ui::Menu::MultilineAction>(
-					menu,
-					st::defaultMenu,
-					st::historySponsorInfoItem,
-					st::historyHasCustomEmojiPosition,
-					base::duplicate(i));
-				item->clicks(
-				) | rpl::start_with_next(callback, menu->lifetime());
-				menu->addAction(std::move(item));
-				if (i != info.back()) {
-					menu->addSeparator();
-				}
-			}
-		};
-		using namespace Ui::Menu;
-		CreateAddActionCallback(menu)(MenuCallback::Args{
-			.text = tr::lng_sponsored_info_menu(tr::now),
-			.handler = nullptr,
-			.icon = &st::menuIconChannel,
-			.fillSubmenu = std::move(fillSubmenu),
-		});
-		menu->addSeparator(&st::expandedMenuSeparator);
-	}
-	menu->addAction(tr::lng_sponsored_hide_ads(tr::now), [=] {
-		if (controller->session().premium()) {
-			using Result = Data::SponsoredReportResult;
-			controller->session().sponsoredMessages().createReportCallback(
-				itemId)(Result::Id("-1"), [](const auto &) {});
-		} else {
-			ShowPremiumPreviewBox(controller, PremiumFeature::NoAds);
-		}
-	}, &st::menuIconCancel);
 }
 
 } // namespace
@@ -2271,38 +2215,58 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		}
 		return item;
 	};
-	const auto whoReactedItem = groupLeaderOrSelf(_dragStateItem);
-	const auto hasWhoReactedItem = whoReactedItem
-		&& Api::WhoReactedExists(whoReactedItem, Api::WhoReactedList::All);
-	const auto clickedReaction = link
-		? link->property(
-			kReactionsCountEmojiProperty).value<Data::ReactionId>()
-		: Data::ReactionId();
+	const auto leaderOrSelf = groupLeaderOrSelf(_dragStateItem);
+	const auto hasWhoReactedItem = leaderOrSelf
+		&& Api::WhoReactedExists(leaderOrSelf, Api::WhoReactedList::All);
+	using namespace HistoryView::Reactions;
+	const auto clickedReaction = ReactionIdOfLink(link);
+	const auto linkPhoneNumber = link
+		? link->property(kPhoneNumberLinkProperty).toString()
+		: QString();
+	const auto linkUserpicPeerId = (link && _dragStateUserpic)
+		? link->property(kPeerLinkPeerIdProperty).toULongLong()
+		: 0;
+	const auto session = &this->session();
 	_whoReactedMenuLifetime.destroy();
 	if (!clickedReaction.empty()
-		&& whoReactedItem
-		&& Api::WhoReactedExists(whoReactedItem, Api::WhoReactedList::One)) {
+		&& leaderOrSelf
+		&& Api::WhoReactedExists(leaderOrSelf, Api::WhoReactedList::One)) {
 		HistoryView::ShowWhoReactedMenu(
 			&_menu,
 			e->globalPos(),
 			this,
-			whoReactedItem,
+			leaderOrSelf,
 			clickedReaction,
 			_controller,
 			_whoReactedMenuLifetime);
 		e->accept();
 		return;
+	} else if (!linkPhoneNumber.isEmpty()) {
+		PhoneClickHandler(session, linkPhoneNumber).onClick(
+			prepareClickContext(
+				Qt::LeftButton,
+				_dragStateItem ? _dragStateItem->fullId() : FullMsgId()));
+		return;
 	}
 	_menu = base::make_unique_q<Ui::PopupMenu>(this, st::popupMenuWithIcons);
-	const auto session = &this->session();
+	if (linkUserpicPeerId) {
+		_widget->fillSenderUserpicMenu(
+			_menu.get(),
+			session->data().peer(PeerId(linkUserpicPeerId)));
+		_menu->popup(e->globalPos());
+		e->accept();
+		return;
+	}
 	const auto controller = _controller;
 
 	if (hasWhoReactedItem) {
 		HistoryView::AddWhoReactedAction(
 			_menu,
 			this,
-			whoReactedItem,
+			leaderOrSelf,
 			_controller);
+	} else if (leaderOrSelf) {
+		HistoryView::MaybeAddWhenEditedAction(_menu, leaderOrSelf);
 	}
 
 	const auto addItemActions = [&](
@@ -2774,7 +2738,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 								}
 
 								const auto history = item->history()->peer->owner().history(item->history()->peer);
-								auto resolved = history->resolveForwardDraft(Data::ForwardDraft{.ids = std::move(MessageIdsList(1, itemId))});
+								auto resolved = history->resolveForwardDraft(Data::ForwardDraft{ .ids = MessageIdsList(1, itemId) });
 
 								api->forwardMessages(std::move(resolved), action, [] {
 									Ui::Toast::Show(tr::lng_share_done(tr::now));
@@ -2814,7 +2778,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 									}
 
 									const auto history = item->history()->peer->owner().history(item->history()->peer);
-									auto resolved = history->resolveForwardDraft(Data::ForwardDraft{ .ids = std::move(MessageIdsList(1, itemId)), .options = Data::ForwardOptions::NoSenderNames });
+									auto resolved = history->resolveForwardDraft(Data::ForwardDraft{ .ids = MessageIdsList(1, itemId), .options = Data::ForwardOptions::NoSenderNames });
 
 									api->forwardMessages(std::move(resolved), action, [] {
 										Ui::Toast::Show(tr::lng_share_done(tr::now));
@@ -2845,7 +2809,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						action.generateLocal = false;
 
 						const auto history = item->history()->peer->owner().history(api->session().user()->asUser());
-						auto resolved = history->resolveForwardDraft(Data::ForwardDraft{ .ids = std::move(MessageIdsList( 1, itemId )) });
+						auto resolved = history->resolveForwardDraft(Data::ForwardDraft{ .ids = MessageIdsList(1, itemId) });
 
 						api->forwardMessages(std::move(resolved), action, [] {
 							Ui::Toast::Show(tr::lng_share_done(tr::now));
@@ -2908,8 +2872,18 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			? link->copyToClipboardContextItemText()
 			: QString();
 
-		if (item && item->isSponsored()) {
-			FillSponsoredMessagesMenu(controller, item->fullId(), _menu);
+		const auto sponsored = (item && item->isSponsored())
+			? item
+			: (Element::Moused() && Element::Moused()->data()->isSponsored())
+			? Element::Moused()->data().get()
+			: nullptr;
+		if (sponsored) {
+			Menu::FillSponsored(
+				this,
+				Ui::Menu::CreateAddActionCallback(_menu),
+				controller->uiShow(),
+				sponsored->fullId(),
+				false);
 		}
 		if (isUponSelected > 0) {
 			addReplyAction(item);
@@ -3017,22 +2991,30 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 				HistoryView::CopyPostLink(controller, itemId, HistoryView::Context::History);
 			}, &st::menuIconLink);
 		}
-		if (item && item->isSponsored()) {
-			if (!_menu->empty()) {
-				_menu->addSeparator(&st::expandedMenuSeparator);
+		if (sponsored) {
+			const auto hasAbout = ranges::any_of(
+				_menu->actions(),
+				[about = tr::lng_sponsored_menu_revenued_about(tr::now)](
+						const QAction *action) {
+					return action->text() == about;
+				});
+			if (!hasAbout) {
+				if (!_menu->empty()) {
+					_menu->addSeparator(&st::expandedMenuSeparator);
+				}
+				auto item = base::make_unique_q<Ui::Menu::MultilineAction>(
+					_menu,
+					st::menuWithIcons,
+					st::historyHasCustomEmoji,
+					st::historySponsoredAboutMenuLabelPosition,
+					TextWithEntities{ tr::lng_sponsored_title(tr::now) },
+					&st::menuIconInfo);
+				item->clicks(
+				) | rpl::start_with_next([=] {
+					controller->show(Box(Ui::AboutSponsoredBox));
+				}, item->lifetime());
+				_menu->addAction(std::move(item));
 			}
-			auto item = base::make_unique_q<Ui::Menu::MultilineAction>(
-				_menu,
-				st::menuWithIcons,
-				st::historyHasCustomEmoji,
-				st::historySponsoredAboutMenuLabelPosition,
-				TextWithEntities{ tr::lng_sponsored_title(tr::now) },
-				&st::menuIconInfo);
-			item->clicks(
-			) | rpl::start_with_next([=] {
-				controller->show(Box(Ui::AboutSponsoredBox));
-			}, item->lifetime());
-			_menu->addAction(std::move(item));
 		}
 		if (isUponSelected > 1) {
 			if (selectedState.count > 0 && selectedState.count == selectedState.canForwardCount) {
@@ -3090,7 +3072,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 								}
 
 								const auto history = item->history()->peer->owner().history(item->history()->peer);
-								auto resolved = history->resolveForwardDraft(Data::ForwardDraft{.ids = std::move(MessageIdsList(1, itemId))});
+								auto resolved = history->resolveForwardDraft(Data::ForwardDraft{ .ids = MessageIdsList(1, itemId) });
 
 								api->forwardMessages(std::move(resolved), action, [] {
 									Ui::Toast::Show(tr::lng_share_done(tr::now));
@@ -3125,7 +3107,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 									}
 
 									const auto history = item->history()->peer->owner().history(item->history()->peer);
-									auto resolved = history->resolveForwardDraft(Data::ForwardDraft{.ids = std::move(MessageIdsList(1, itemId)), .options = Data::ForwardOptions::NoSenderNames});
+									auto resolved = history->resolveForwardDraft(Data::ForwardDraft{ .ids = MessageIdsList(1, itemId), .options = Data::ForwardOptions::NoSenderNames });
 
 									api->forwardMessages(std::move(resolved), action, [] {
 										Ui::Toast::Show(tr::lng_share_done(tr::now));
@@ -3156,7 +3138,7 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 						action.generateLocal = false;
 
 						const auto history = item->history()->peer->owner().history(api->session().user()->asUser());
-						auto resolved = history->resolveForwardDraft(Data::ForwardDraft{.ids = std::move(MessageIdsList(1, itemId))});
+						auto resolved = history->resolveForwardDraft(Data::ForwardDraft{ .ids = MessageIdsList(1, itemId) });
 
 						api->forwardMessages(std::move(resolved), action, [] {
 							Ui::Toast::Show(tr::lng_share_done(tr::now));
@@ -3210,9 +3192,6 @@ void HistoryInner::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 			HistoryView::EmojiPacksSource::Message,
 			_controller);
 		const auto added = (_menu->actions().size() > wasAmount);
-		if (!added) {
-			_menu->addSeparator();
-		}
 		HistoryView::AddSelectRestrictionAction(
 			_menu,
 			textItem ? textItem : _dragStateItem,
@@ -4232,6 +4211,7 @@ void HistoryInner::mouseActionUpdate() {
 
 	TextState dragState;
 	ClickHandlerHost *lnkhost = nullptr;
+	auto dragStateUserpic = false;
 	auto selectingText = (item == _mouseActionItem)
 		&& (view == Element::Hovered())
 		&& !_selected.empty()
@@ -4327,6 +4307,7 @@ void HistoryInner::mouseActionUpdate() {
 						// stop enumeration if we've found a userpic under the cursor
 						if (point.y() >= userpicTop && point.y() < userpicTop + st::msgPhotoSize) {
 							dragState = TextState(nullptr, view->fromPhotoLink());
+							dragStateUserpic = true;
 							_dragStateItem = nullptr;
 							lnkhost = view;
 							return false;
@@ -4338,6 +4319,7 @@ void HistoryInner::mouseActionUpdate() {
 		}
 	}
 	auto lnkChanged = ClickHandler::setActive(dragState.link, lnkhost);
+	_dragStateUserpic = dragStateUserpic;
 	if (lnkChanged || dragState.cursor != _mouseCursorState) {
 		Ui::Tooltip::Hide();
 	}
@@ -4984,6 +4966,11 @@ QString HistoryInner::tooltipText() const {
 			}
 		}
 	} else if (const auto lnk = ClickHandler::getActive()) {
+		using namespace HistoryView::Reactions;
+		const auto count = ReactionCountOfLink(_dragStateItem, lnk);
+		if (count.count && count.shortened) {
+			return Lang::FormatCountDecimal(count.count);
+		}
 		return lnk->tooltip();
 	} else if (const auto view = Element::Moused()) {
 		StateRequest request;

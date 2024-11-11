@@ -17,6 +17,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/history_item_text.h"
 #include "history/view/media/history_view_media.h"
 #include "history/view/media/history_view_sticker.h"
+#include "history/view/reactions/history_view_reactions.h"
 #include "history/view/reactions/history_view_reactions_button.h"
 #include "history/view/reactions/history_view_reactions_selector.h"
 #include "history/view/history_view_context_menu.h"
@@ -1184,6 +1185,7 @@ auto ListWidget::collectSelectedItems() const -> SelectedItems {
 		result.canDelete = selection.canDelete;
 		result.canForward = selection.canForward;
 		result.canSendNow = selection.canSendNow;
+		result.canReschedule = selection.canReschedule;
 		return result;
 	};
 	auto items = SelectedItems();
@@ -1318,6 +1320,7 @@ bool ListWidget::addToSelection(
 	iterator->second.canDelete = item->canDelete();
 	iterator->second.canForward = item->allowsForward();
 	iterator->second.canSendNow = item->allowsSendNow();
+	iterator->second.canReschedule = item->allowsReschedule();
 	return true;
 }
 
@@ -2785,10 +2788,7 @@ void ListWidget::showContextMenu(QContextMenuEvent *e, bool showFromTouch) {
 		: _overElement
 		? _overElement->data().get()
 		: nullptr;
-	const auto clickedReaction = link
-		? link->property(
-			kReactionsCountEmojiProperty).value<Data::ReactionId>()
-		: Data::ReactionId();
+	const auto clickedReaction = Reactions::ReactionIdOfLink(link);
 	_whoReactedMenuLifetime.destroy();
 	if (!clickedReaction.empty()
 		&& overItem
