@@ -2605,6 +2605,8 @@ void HistoryWidget::showHistory(
 					}
 				}));
 			checkState();
+		} else {
+			requestSponsoredMessageBar();
 		}
 	} else {
 		_chooseForReport = nullptr;
@@ -4597,7 +4599,6 @@ void HistoryWidget::showFinished() {
 	_showAnimation = nullptr;
 	doneShow();
 	synteticScrollToY(_scroll->scrollTop());
-	requestSponsoredMessageBar();
 }
 
 void HistoryWidget::doneShow() {
@@ -7842,12 +7843,12 @@ void HistoryWidget::createSponsoredMessageBar() {
 	session().sponsoredMessages().itemRemoved(
 		maybeFullId
 	) | rpl::start_with_next([this] {
+		_sponsoredMessageBar->toggle(false, anim::type::normal);
 		_sponsoredMessageBar->shownValue() | rpl::filter(
 			!rpl::mappers::_1
 		) | rpl::start_with_next([this] {
 			_sponsoredMessageBar = nullptr;
 		}, _sponsoredMessageBar->lifetime());
-		_sponsoredMessageBar->toggle(false, anim::type::normal);
 	}, _sponsoredMessageBar->lifetime());
 
 	if (maybeFullId) {
