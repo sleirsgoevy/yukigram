@@ -41,7 +41,7 @@ namespace {
 struct State final {
 	Ui::Animations::Simple animation;
 	std::optional<FilterId> lastFilterId = std::nullopt;
-	rpl::lifetime unreadLifetime;
+	rpl::lifetime rebuildLifetime;
 	base::unique_qptr<Ui::PopupMenu> menu;
 
 	Api::RemoveComplexChatFilter removeApi;
@@ -293,14 +293,18 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 		if ((list.size() <= 1 && !slider->width()) || state->ignoreRefresh) {
 			return;
 		}
-		auto sections = ranges::views::all(
-			list
-		) | ranges::views::transform([](const Data::ChatFilter &filter) {
-			return filter.title().isEmpty()
-				? tr::lng_filters_all_short(tr::now)
-				: filter.title();
-		}) | ranges::to_vector;
-		slider->setSections(std::move(sections));
+		const auto sectionsChanged = slider->setSectionsAndCheckChanged(
+			ranges::views::all(
+				list
+			) | ranges::views::transform([](const Data::ChatFilter &filter) {
+				return filter.title().isEmpty()
+					? tr::lng_filters_all_short(tr::now)
+					: filter.title();
+			}) | ranges::to_vector);
+		if (!sectionsChanged) {
+			return;
+		}
+		state->rebuildLifetime.destroy();
 		slider->fitWidthToSections();
 		{
 			const auto reorderAll = session->user()->isPremium();
@@ -312,7 +316,7 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 				: premiumFrom);
 			slider->lockedClicked() | rpl::start_with_next([=] {
 				controller->show(Box(FiltersLimitBox, session, std::nullopt));
-			}, slider->lifetime());
+			}, state->rebuildLifetime);
 			if (state->reorder) {
 				state->reorder->cancel();
 				state->reorder->clearPinnedIntervals();
@@ -326,7 +330,6 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 		}
 		if (trackActiveFilterAndUnreadAndReorder) {
 			auto includeMuted = Data::IncludeMutedCounterFoldersValue();
-			state->unreadLifetime.destroy();
 			for (auto i = 0; i < list.size(); i++) {
 				rpl::combine(
 					Data::UnreadStateValue(session, list[i].id()),
@@ -334,13 +337,21 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 				) | rpl::start_with_next([=](
 						const Dialogs::UnreadState &state,
 						bool includeMuted) {
-					const auto muted = (state.chatsMuted + state.marksMuted);
-					const auto count = (state.chats + state.marks)
+					const auto chats = state.chatsTopic
+						? (state.chats - state.chatsTopic + state.forums)
+						: state.chats;
+					const auto chatsMuted = state.chatsTopicMuted
+						? (state.chatsMuted
+							- state.chatsTopicMuted
+							+ state.forumsMuted)
+						: state.chatsMuted;
+					const auto muted = (chatsMuted + state.marksMuted);
+					const auto count = (chats + state.marks)
 						- (includeMuted ? 0 : muted);
 					const auto isMuted = includeMuted && (count == muted);
 					slider->setUnreadCount(i, count, isMuted);
 					slider->fitWidthToSections();
-				}, state->unreadLifetime);
+				}, state->rebuildLifetime);
 			}
 		}
 		[&] {
@@ -379,7 +390,7 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 					}
 				}
 				state->reorder->finishReordering();
-			}, slider->lifetime());
+			}, state->rebuildLifetime);
 		}
 		rpl::single(-1) | rpl::then(
 			slider->sectionActivated()
@@ -394,7 +405,7 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 				scrollToIndex(index, anim::type::normal);
 			}
 			applyFilter(filter);
-		}, wrap->lifetime());
+		}, state->rebuildLifetime);
 		slider->contextMenuRequested() | rpl::start_with_next([=](int index) {
 			if (trackActiveFilterAndUnreadAndReorder) {
 				ShowMenu(wrap, controller, state, index);
@@ -406,7 +417,7 @@ not_null<Ui::RpWidget*> AddChatFiltersTabsStrip(
 					slider->activeSection(),
 					[=](int i) { slider->setActiveSection(i); });
 			}
-		}, slider->lifetime());
+		}, state->rebuildLifetime);
 		wrap->toggle((list.size() > 1), anim::type::instant);
 
 		if (state->reorder) {

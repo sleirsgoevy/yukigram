@@ -23,6 +23,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/filter_icons.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/wrap/vertical_layout_reorder.h"
+#include "ui/widgets/menu/menu_add_action_callback_factory.h"
 #include "ui/widgets/popup_menu.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/ui_utility.h"
@@ -212,7 +213,7 @@ void FiltersMenu::refresh() {
 	_scroll.scrollToY(oldTop);
 
 	// Fix active chat folder when hide all chats is enabled.
-	if (GetEnhancedBool("hide_all_chats")) {
+	if (GetEnhancedBool("hide_all_chats") && filters->isEarlyStart()) {
 		const auto lookup_id = filters->lookupId(0);
 		_session->setActiveChatsFilter(lookup_id);
 	}
@@ -287,12 +288,20 @@ base::unique_qptr<Ui::SideBarButton> FiltersMenu::prepareButton(
 		) | rpl::start_with_next([=](
 				const Dialogs::UnreadState &state,
 				bool includeMuted) {
-			const auto muted = (state.chatsMuted + state.marksMuted);
-			const auto count = (state.chats + state.marks)
+			const auto chats = state.chatsTopic
+				? (state.chats - state.chatsTopic + state.forums)
+				: state.chats;
+			const auto chatsMuted = state.chatsTopicMuted
+				? (state.chatsMuted
+					- state.chatsTopicMuted
+					+ state.forumsMuted)
+				: state.chatsMuted;
+			const auto muted = (chatsMuted + state.marksMuted);
+			const auto count = (chats + state.marks)
 				- (includeMuted ? 0 : muted);
 			const auto string = !count
 				? QString()
-				: (count > 99)
+				: (count > 999)
 				? "99+"
 				: QString::number(count);
 			raw->setBadge(string, includeMuted && (count == muted));
@@ -454,18 +463,11 @@ void FiltersMenu::showMenu(QPoint position, FilterId id) {
 	_popupMenu = base::make_unique_q<Ui::PopupMenu>(
 		i->second.get(),
 		st::popupMenuWithIcons);
-	const auto addAction = Window::PeerMenuCallback([&](
-			Window::PeerMenuCallback::Args args) {
-		return _popupMenu->addAction(
-			args.text,
-			crl::guard(&_outer, std::move(args.handler)),
-			args.icon);
-	});
-
+	const auto addAction = Ui::Menu::CreateAddActionCallback(_popupMenu);
 	if (id) {
 		addAction(
 			tr::lng_filters_context_edit(tr::now),
-			[=] { EditExistingFilter(_session, id); },
+			crl::guard(&_outer, [=] { EditExistingFilter(_session, id); }),
 			&st::menuIconEdit);
 
 		auto filteredChats = [=] {
@@ -478,9 +480,9 @@ void FiltersMenu::showMenu(QPoint position, FilterId id) {
 
 		addAction({
 			.text = tr::lng_filters_context_remove(tr::now),
-			.handler = [=, this] {
+			.handler = crl::guard(&_outer, [=, this] {
 				_removeApi.request(Ui::MakeWeak(&_outer), _session, id);
-			},
+			}),
 			.icon = &st::menuIconDeleteAttention,
 			.isAttention = true,
 		});
@@ -499,7 +501,7 @@ void FiltersMenu::showMenu(QPoint position, FilterId id) {
 
 		addAction(
 			tr::lng_filters_setup_menu(tr::now),
-			[=] { openFiltersSettings(); },
+			crl::guard(&_outer, [=] { openFiltersSettings(); }),
 			&st::menuIconEdit);
 	}
 	if (_popupMenu->empty()) {
