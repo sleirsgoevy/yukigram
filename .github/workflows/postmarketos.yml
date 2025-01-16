@@ -64,6 +64,8 @@ jobs:
         env:
           ABUILD_PRIVATE_KEY: ${{ secrets.ABUILD_PRIVATE_KEY }}
         run: |
+          set -exuo pipefail
+
           sudo apt-get install python3-pip python3-virtualenv
           virtualenv .
           . bin/activate
