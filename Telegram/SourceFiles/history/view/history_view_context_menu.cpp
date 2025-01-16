@@ -91,6 +91,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
 #include "spellcheck/spellcheck_types.h"
+#include "iv/iv_instance.h" 
 #include "facades.h"
 #include "apiwrap.h"
 #include "styles/style_chat.h"
@@ -396,30 +397,16 @@ bool AddForwardSelectedAction(
 	}
 
 	menu->addAction(tr::lng_context_forward_selected(tr::now), [=] {
-		const auto weak = Ui::MakeWeak(list);
-		const auto callback = [=] {
-			if (const auto strong = weak.data()) {
-				strong->cancelSelection();
-			}
-		};
 		Window::ShowNewForwardMessagesBox(
 			request.navigation,
 			ExtractIdsList(request.selectedItems),
-			false,
-			callback);
+			false);
 	}, &st::menuIconForward);
 	menu->addAction(tr::lng_context_forward_selected_no_quote(tr::now), [=] {
-		const auto weak = Ui::MakeWeak(list);
-		const auto callback = [=] {
-			if (const auto strong = weak.data()) {
-				strong->cancelSelection();
-			}
-		};
 		Window::ShowNewForwardMessagesBox(
 				request.navigation,
 				ExtractIdsList(request.selectedItems),
-				true,
-				callback);
+				true);
 	}, &st::menuIconForward);
 	menu->addAction(tr::lng_forward_to_saved_message(tr::now), [=] {
 		const auto weak = Ui::MakeWeak(list);
@@ -1571,6 +1558,28 @@ void CopyPostLink(
 	}
 }
 
+void ViewAsJSON(
+	not_null<Window::SessionController*> controller,
+	FullMsgId itemId) {
+	ViewAsJSON(controller->uiShow(), itemId);
+}
+
+void ViewAsJSON(
+	std::shared_ptr<Main::SessionShow> show,
+	FullMsgId itemId) {
+	const auto item = show->session().data().message(itemId);
+	if (!item) {
+		return;
+	}
+	item->history()->session().api().exportMessageAsBase64(item,
+		crl::guard(show, [=](const QString& base64) {
+			Core::App().iv().showTLViewer(MTP::details::kCurrentLayer, base64);
+		}),
+		crl::guard(show, [=] {
+			show->showToast(u"error"_q);
+		}));
+}
+
 void CopyStoryLink(
 		std::shared_ptr<Main::SessionShow> show,
 		FullStoryId storyId) {
@@ -1678,20 +1687,27 @@ void AddSaveSoundForNotifications(
 	}, &st::menuIconSoundAdd);
 }
 
-void AddWhenEditedActionHelper(
+void AddWhenEditedForwardedActionHelper(
 		not_null<Ui::PopupMenu*> menu,
 		not_null<HistoryItem*> item,
 		bool insertSeparator) {
-	if (item->history()->peer->isUser()) {
-		if (const auto edited = item->Get<HistoryMessageEdited>()) {
-			if (!item->hideEditedBadge()) {
-				if (insertSeparator && !menu->empty()) {
-					menu->addSeparator(&st::expandedMenuSeparator);
-				}
-				menu->addAction(Ui::WhenReadContextAction(
-					menu.get(),
-					Api::WhenEdited(item->from(), edited->date)));
+	if (const auto forwarded = item->Get<HistoryMessageForwarded>()) {
+		if (!forwarded->story && forwarded->psaType.isEmpty()) {
+			if (insertSeparator && !menu->empty()) {
+				menu->addSeparator(&st::expandedMenuSeparator);
 			}
+			menu->addAction(Ui::WhenReadContextAction(
+				menu.get(),
+				Api::WhenOriginal(item->from(), forwarded->originalDate)));
+		}
+	} else if (const auto edited = item->Get<HistoryMessageEdited>()) {
+		if (!item->hideEditedBadge()) {
+			if (insertSeparator && !menu->empty()) {
+				menu->addSeparator(&st::expandedMenuSeparator);
+			}
+			menu->addAction(Ui::WhenReadContextAction(
+				menu.get(),
+				Api::WhenEdited(item->from(), edited->date)));
 		}
 	}
 }
@@ -1740,8 +1756,8 @@ void AddWhoReactedAction(
 						whoReadIds)));
 		}
 	};
-	AddWhenEditedActionHelper(menu, item, false);
 	if (item->history()->peer->isUser()) {
+		AddWhenEditedForwardedActionHelper(menu, item, false);
 		menu->addAction(Ui::WhenReadContextAction(
 			menu.get(),
 			Api::WhoReacted(item, context, st::defaultWhoRead, whoReadIds),
@@ -1753,16 +1769,14 @@ void AddWhoReactedAction(
 			Data::ReactedMenuFactory(&controller->session()),
 			participantChosen,
 			showAllChosen));
-	if (!menu->empty()) {
-		menu->addSeparator();
-	}
+		AddWhenEditedForwardedActionHelper(menu, item, true);
 	}
 }
 
-void MaybeAddWhenEditedAction(
+void MaybeAddWhenEditedForwardedAction(
 		not_null<Ui::PopupMenu*> menu,
 		not_null<HistoryItem*> item) {
-	AddWhenEditedActionHelper(menu, item, true);
+	AddWhenEditedForwardedActionHelper(menu, item, true);
 }
 
 void AddEditTagAction(

@@ -357,7 +357,8 @@ void ShareBox::prepare() {
 			[this](FilterId id) {
 				_inner->applyChatFilter(id);
 				scrollToY(0);
-			});
+			},
+			Window::GifPauseReason::Layer);
 		chatsFilters->lower();
 		chatsFilters->heightValue() | rpl::start_with_next([this](int h) {
 			updateScrollSkips();
@@ -1489,7 +1490,8 @@ ChatHelpers::ForwardedMessagePhraseArgs CreateForwardedMessagePhraseArgs(
 ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 		std::shared_ptr<Ui::Show> show,
 		not_null<History*> history,
-		MessageIdsList msgIds) {
+		MessageIdsList msgIds,
+		bool no_quote) {
 	struct State final {
 		base::flat_set<mtpRequestId> requests;
 	};
@@ -1508,39 +1510,30 @@ ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 			return;
 		}
 
-		const auto error = [&] {
-			for (const auto thread : result) {
-				const auto error = GetErrorTextForSending(
-					thread,
-					{ .forward = &items, .text = &comment });
-				if (!error.isEmpty()) {
-					return std::make_pair(error, thread);
-				}
-			}
-			return std::make_pair(QString(), result.front());
-		}();
-		if (!error.first.isEmpty()) {
-			auto text = TextWithEntities();
-			if (result.size() > 1) {
-				text.append(
-					Ui::Text::Bold(error.second->chatListName())
-				).append("\n\n");
-			}
-			text.append(error.first);
-			show->showBox(Ui::MakeInformBox(text));
+		const auto error = GetErrorForSending(
+			result,
+			{ .forward = &items, .text = &comment });
+		if (error.error) {
+			show->showBox(MakeSendErrorBox(error, result.size() > 1));
 			return;
 		}
 
 		using Flag = MTPmessages_ForwardMessages::Flag;
-		const auto commonSendFlags = Flag(0)
-			| Flag::f_with_my_score
-			| (options.scheduled ? Flag::f_schedule_date : Flag(0))
-			| ((forwardOptions != Data::ForwardOptions::PreserveInfo)
-				? Flag::f_drop_author
-				: Flag(0))
-			| ((forwardOptions == Data::ForwardOptions::NoNamesAndCaptions)
-				? Flag::f_drop_media_captions
-				: Flag(0));
+		auto commonSendFlags = MTPmessages_ForwardMessages::Flags(0);
+		if (no_quote) {
+			commonSendFlags = (options.scheduled ? Flag::f_schedule_date : Flag(0)) | Flag::f_drop_author;
+		} else {
+			commonSendFlags = Flag(0)
+				| Flag::f_with_my_score
+				| (options.scheduled ? Flag::f_schedule_date : Flag(0))
+				| ((forwardOptions != Data::ForwardOptions::PreserveInfo)
+					? Flag::f_drop_author
+					: Flag(0))
+				| ((forwardOptions == Data::ForwardOptions::NoNamesAndCaptions)
+					? Flag::f_drop_media_captions
+					: Flag(0));
+		}
+
 		auto mtpMsgIds = QVector<MTPint>();
 		mtpMsgIds.reserve(existingIds.size());
 		for (const auto &fullId : existingIds) {
@@ -1696,7 +1689,8 @@ void FastShareMessage(
 		.submitCallback = ShareBox::DefaultForwardCallback(
 			show,
 			history,
-			msgIds),
+			msgIds,
+			false),
 		.filterCallback = std::move(filterCallback),
 		.forwardOptions = {
 			.sendersCount = ItemsForwardSendersCount(items),
@@ -1737,30 +1731,13 @@ void FastShareLink(
 			return;
 		}
 
-		const auto error = [&] {
-			for (const auto thread : result) {
-				const auto error = GetErrorTextForSending(
-					thread,
-					{ .text = &comment });
-				if (!error.isEmpty()) {
-					return std::make_pair(error, thread);
-				}
-			}
-			return std::make_pair(QString(), result.front());
-		}();
-		if (!error.first.isEmpty()) {
-			auto text = TextWithEntities();
-			if (result.size() > 1) {
-				text.append(
-					Ui::Text::Bold(error.second->chatListName())
-				).append("\n\n");
-			}
-			text.append(error.first);
+		const auto error = GetErrorForSending(
+			result,
+			{ .text = &comment });
+		if (error.error) {
 			if (const auto weak = *box) {
-				weak->getDelegate()->show(Ui::MakeConfirmBox({
-					.text = text,
-					.inform = true,
-				}));
+				weak->getDelegate()->show(
+					MakeSendErrorBox(error, result.size() > 1));
 			}
 			return;
 		}

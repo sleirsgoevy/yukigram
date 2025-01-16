@@ -67,7 +67,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "api/api_updates.h"
 #include "mtproto/mtproto_config.h"
 #include "history/history.h"
-#include "history/history_item_helpers.h" // GetErrorTextForSending.
+#include "history/history_item_helpers.h" // GetErrorForSending.
 #include "history/history_widget.h"
 #include "history/view/history_view_context_menu.h"
 #include "window/window_separate_id.h"
@@ -1432,6 +1432,7 @@ void Filler::fillChatsListActions() {
 	}
 	addManageChat();
 	addNewMembers();
+	addBoostChat();
 	addVideoChat();
 	_addAction(PeerMenuCallback::Args{ .isSeparator = true });
 	addReport();
@@ -1541,6 +1542,7 @@ void Filler::fillRepliesActions() {
 		addInfo();
 		addManageTopic();
 	}
+	addBoostChat();
 	addCreatePoll();
 	addToggleTopicClosed();
 	addDeleteTopic();
@@ -2454,172 +2456,59 @@ Api::SendAction prepareSendAction(
 }
 
 // Source from share box
-QPointer<Ui::BoxContent> ShowNewForwardMessagesBox(
+void ShowNewForwardMessagesBox(
 		not_null<Window::SessionNavigation*> navigation,
-		MessageIdsList &&items,
-		bool no_quote,
-		FnMut<void()> &&successCallback) {
-	struct ShareData {
-		ShareData(not_null<PeerData*> peer, MessageIdsList &&ids, FnMut<void()> &&callback)
-		: peer(peer)
-		, msgIds(std::move(ids))
-		, submitCallback(std::move(callback)) {
-		}
-		not_null<PeerData*> peer;
-		MessageIdsList msgIds;
-		base::flat_set<mtpRequestId> requests;
-		FnMut<void()> submitCallback;
-	};
-	const auto weak = std::make_shared<QPointer<ShareBox>>();
-	const auto item = navigation->session().data().message(items[0]);
+		MessageIdsList &&msgIds,
+		bool no_quote) {
+	const auto item = navigation->session().data().message(msgIds[0]);
 	const auto history = item->history();
 	const auto owner = &history->owner();
 	const auto session = &history->session();
-	const auto data = std::make_shared<ShareData>(history->peer, std::move(items), std::move(successCallback));
+	const auto isGame = item->getMessageBot()
+		&& item->media()
+		&& (item->media()->game() != nullptr);
 
-	const auto itemsList = owner->idsToItems(data->msgIds);
-	const auto hasCaptions = ranges::any_of(itemsList, [](auto item) {
+	const auto items = owner->idsToItems(msgIds);
+	const auto hasCaptions = ranges::any_of(items, [](auto item) {
 		return item->media()
 			&& !item->originalText().text.isEmpty()
 			&& item->media()->allowsEditCaption();
 	});
 	const auto hasOnlyForcedForwardedInfo = hasCaptions
 		? false
-		: ranges::all_of(itemsList, [](auto item) {
+		: ranges::all_of(items, [](auto item) {
 			return item->media() && item->media()->forceForwardedInfo();
-	});
+		});
 
-	auto submitCallback = [=](
-			std::vector<not_null<Data::Thread*>> &&result,
-			TextWithTags &&comment,
-			Api::SendOptions options,
-			Data::ForwardOptions forwardOptions) {
-		if (!data->requests.empty()) {
-			return; // Share clicked already.
-		}
-		auto items = history->owner().idsToItems(data->msgIds);
-		if (items.empty() || result.empty()) {
-			return;
-		}
-
-		const auto error = [&] {
-			for (const auto thread : result) {
-				const auto error = GetErrorTextForSending(
-					thread,
-					{ .forward = &items, .text = &comment });
-				if (!error.isEmpty()) {
-					return std::make_pair(error, thread);
-				}
-			}
-			return std::make_pair(QString(), result.front());
-		}();
-		if (!error.first.isEmpty()) {
-			auto text = TextWithEntities();
-			if (result.size() > 1) {
-				text.append(
-					Ui::Text::Bold(error.second->chatListName())
-				).append("\n\n");
-			}
-			text.append(error.first);
-			Ui::show(Ui::MakeInformBox(text), Ui::LayerOption::KeepOther);
-			return;
-		}
-
-		using Flag = MTPmessages_ForwardMessages::Flag;
-		auto commonSendFlags = MTPmessages_ForwardMessages::Flags(0);
-		if (no_quote) {
-			commonSendFlags = (options.scheduled ? Flag::f_schedule_date : Flag(0)) | Flag::f_drop_author;
-		} else {
-			commonSendFlags = commonSendFlags
-				| Flag::f_with_my_score
-				| (options.scheduled ? Flag::f_schedule_date : Flag(0))
-				| ((forwardOptions != Data::ForwardOptions::PreserveInfo)
-					? Flag::f_drop_author
-					: Flag(0))
-				| ((forwardOptions == Data::ForwardOptions::NoNamesAndCaptions)
-					? Flag::f_drop_media_captions
-					: Flag(0));
-		}
-		auto msgIds = QVector<MTPint>();
-		msgIds.reserve(data->msgIds.size());
-		for (const auto &fullId : data->msgIds) {
-			msgIds.push_back(MTP_int(fullId.msg));
-		}
-		const auto generateRandom = [&] {
-			auto result = QVector<MTPlong>(data->msgIds.size());
-			for (auto &value : result) {
-				value = base::RandomValue<MTPlong>();
-			}
-			return result;
-		};
-		auto &api = owner->session().api();
-		auto &histories = owner->histories();
-		const auto requestType = Data::Histories::RequestType::Send;
-		for (const auto thread : result) {
-			const auto topicRootId = thread->topicRootId();
-			const auto peer = thread->peer();
-			if (!comment.text.isEmpty()) {
-				auto message = Api::MessageToSend(
-					Api::SendAction(thread, options));
-				message.textWithTags = comment;
-				message.action.options = options;
-				message.action.clearDraft = false;
-				message.action.replyTo.topicRootId = topicRootId;
-				api.sendMessage(std::move(message));
-			}
-			histories.sendRequest(history, requestType, [=](Fn<void()> finish) {
-				auto &api = history->session().api();
-				const auto sendFlags = commonSendFlags
-					| (topicRootId ? Flag::f_top_msg_id : Flag(0))
-					| (ShouldSendSilent(peer, options)
-						? Flag::f_silent
-						: Flag(0));
-				history->sendRequestId = api.request(
-					MTPmessages_ForwardMessages(
-						MTP_flags(sendFlags),
-						data->peer->input,
-						MTP_vector<MTPint>(msgIds),
-						MTP_vector<MTPlong>(generateRandom()),
-						peer->input,
-						MTP_int(topicRootId),
-						MTP_int(options.scheduled),
-						MTP_inputPeerEmpty(), // send_as
-						Data::ShortcutIdToMTP(session, options.shortcutId)
-				)).done([=](const MTPUpdates &updates, mtpRequestId reqId) {
-					history->session().api().applyUpdates(updates);
-					data->requests.remove(reqId);
-					if (data->requests.empty()) {
-						Ui::Toast::Show(tr::lng_share_done(tr::now));
-						Ui::hideLayer();
-					}
-					finish();
-				}).fail([=](const MTP::Error &error) {
-					finish();
-				}).afterRequest(history->sendRequestId).send();
-				return history->sendRequestId;
-			});
-			data->requests.insert(history->sendRequestId);
-		}
-		if (data->submitCallback) {
-			data->submitCallback();
-		}
-	};
 	const auto requiredRight = item->requiredSendRight();
+	const auto requiresInline = item->requiresSendInlineRight();
 	auto filterCallback = [=](not_null<Data::Thread*> thread) {
-		return Data::CanSend(thread, requiredRight);
+		if (const auto user = thread->peer()->asUser()) {
+			if (user->canSendIgnoreRequirePremium()) {
+				return true;
+			}
+		}
+		return Data::CanSend(thread, requiredRight)
+			&& (!requiresInline
+				|| Data::CanSend(thread, ChatRestriction::SendInline))
+			&& (!isGame || !thread->peer()->isBroadcast());
 	};
-	*weak = Ui::show(Box<ShareBox>(ShareBox::Descriptor{
-		.session = session,
-		.submitCallback = std::move(submitCallback),
-		.filterCallback = std::move(filterCallback),
-		.title = no_quote ? tr::lng_title_forward_as_copy() : tr::lng_title_multiple_forward(),
-		.forwardOptions = {
-			.sendersCount = ItemsForwardSendersCount(itemsList),
-			.captionsCount = ItemsForwardCaptionsCount(itemsList),
-			.show = !hasOnlyForcedForwardedInfo,
-		},
-	}));
-	return weak->data();
+	navigation->parentController()->uiShow()->show(Box<ShareBox>(ShareBox::Descriptor{
+						.session = session,
+						.submitCallback = ShareBox::DefaultForwardCallback(
+						   navigation->parentController()->uiShow(),
+			               history,
+			               msgIds,
+			               no_quote),
+						.filterCallback = std::move(filterCallback),
+						.title = no_quote ? tr::lng_title_forward_as_copy() : tr::lng_title_multiple_forward(),
+						.forwardOptions = {
+							.sendersCount = ItemsForwardSendersCount(items),
+							.captionsCount = ItemsForwardCaptionsCount(items),
+							.show = !hasOnlyForcedForwardedInfo,
+						},
+						.premiumRequiredError = SharePremiumRequiredError(),
+					}), Ui::LayerOption::CloseOther);
 }
 
 QPointer<Ui::BoxContent> ShowForwardMessagesBox(
@@ -2807,13 +2696,30 @@ QPointer<Ui::BoxContent> ShowForwardMessagesBox(
 		auto init = [=](not_null<ListBox*> box) {
 			controllerRaw->setSearchNoResultsText(
 				tr::lng_bot_chats_not_found(tr::now));
+			const auto lastFilterId = box->lifetime().make_state<FilterId>(0);
 			const auto chatsFilters = Ui::AddChatFiltersTabsStrip(
 				box,
 				session,
-				[=](FilterId id) { applyFilter(box, id); });
+				[=](FilterId id) {
+					*lastFilterId = id;
+					applyFilter(box, id);
+				},
+				Window::GifPauseReason::Layer);
 			chatsFilters->lower();
-			chatsFilters->heightValue() | rpl::start_with_next([box](int h) {
-				box->setAddedTopScrollSkip(h);
+			rpl::combine(
+				chatsFilters->heightValue(),
+				rpl::producer<bool>([=](auto consumer) {
+					auto lifetime = rpl::lifetime();
+					consumer.put_next(false);
+					box->appendQueryChangedCallback([=](const QString &q) {
+						const auto hasQuery = !q.isEmpty();
+						applyFilter(box, hasQuery ? 0 : (*lastFilterId));
+						consumer.put_next_copy(hasQuery);
+					});
+					return lifetime;
+				})
+			) | rpl::start_with_next([box](int h, bool hasQuery) {
+				box->setAddedTopScrollSkip(hasQuery ? 0 : h);
 			}, box->lifetime());
 			box->multiSelectHeightValue() | rpl::start_with_next([=](int h) {
 				chatsFilters->moveToLeft(0, h);
@@ -3026,16 +2932,6 @@ QPointer<Ui::BoxContent> ShowForwardMessagesBox(
 
 QPointer<Ui::BoxContent> ShowForwardMessagesBox(
 		not_null<Window::SessionNavigation*> navigation,
-		Data::ForwardDraft &&draft,
-		Fn<void()> &&successCallback) {
-	return ShowForwardMessagesBox(
-		navigation->uiShow(),
-		std::move(draft),
-		std::move(successCallback));
-}
-
-QPointer<Ui::BoxContent> ShowForwardMessagesBox(
-		not_null<Window::SessionNavigation*> navigation,
 		MessageIdsList &&items,
 		Fn<void()> &&successCallback) {
 	return ShowOldForwardMessagesBox(
@@ -3151,11 +3047,11 @@ QPointer<Ui::BoxContent> ShowSendNowMessagesBox(
 		: tr::lng_scheduled_send_now(tr::now);
 
 	const auto list = session->data().idsToItems(items);
-	const auto error = GetErrorTextForSending(
+	const auto error = GetErrorForSending(
 		history->peer,
 		{ .forward = &list });
-	if (!error.isEmpty()) {
-		navigation->showToast(error);
+	if (error) {
+		Data::ShowSendErrorToast(navigation, history->peer, error);
 		return { nullptr };
 	}
 	auto done = [
@@ -3340,10 +3236,10 @@ void UnpinAllMessages(
 }
 
 void MenuAddMarkAsReadAllChatsAction(
-		not_null<Window::SessionController*> controller,
+		not_null<Main::Session*> session,
+		std::shared_ptr<Ui::Show> show,
 		const PeerMenuCallback &addAction) {
-	// There is no async to make weak from controller.
-	auto callback = [=, owner = &controller->session().data()] {
+	auto callback = [=, owner = &session->data()] {
 		auto boxCallback = [=](Fn<void()> &&close) {
 			close();
 
@@ -3352,10 +3248,37 @@ void MenuAddMarkAsReadAllChatsAction(
 				MarkAsReadChatList(folder->chatsList());
 			}
 		};
-		controller->show(
-			Ui::MakeConfirmBox({
-				tr::lng_context_mark_read_all_sure(),
-				std::move(boxCallback)
+		show->show(
+			Box([=](not_null<Ui::GenericBox*> box) {
+				Ui::AddSkip(box->verticalLayout());
+				Ui::AddSkip(box->verticalLayout());
+				const auto userpic = Ui::CreateChild<Ui::UserpicButton>(
+					box->verticalLayout(),
+					session->user(),
+					st::mainMenuUserpic);
+				Ui::IconWithTitle(
+					box->verticalLayout(),
+					userpic,
+					Ui::CreateChild<Ui::FlatLabel>(
+						box->verticalLayout(),
+						Info::Profile::NameValue(session->user()),
+						box->getDelegate()->style().title));
+				auto text = rpl::combine(
+					tr::lng_context_mark_read_all_sure(),
+					tr::lng_context_mark_read_all_sure_2(
+						Ui::Text::RichLangValue)
+				) | rpl::map([](QString t1, TextWithEntities t2) {
+					return TextWithEntities()
+						.append(std::move(t1))
+						.append('\n')
+						.append('\n')
+						.append(std::move(t2));
+				});
+				Ui::ConfirmBox(box, {
+					.text = std::move(text),
+					.confirmed = std::move(boxCallback),
+					.confirmStyle = &st::attentionBoxButton,
+				});
 			}),
 			Ui::LayerOption::CloseOther);
 	};

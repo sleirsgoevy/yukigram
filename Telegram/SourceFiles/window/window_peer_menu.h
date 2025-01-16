@@ -74,7 +74,8 @@ void FillSenderUserpicMenu(
 	const PeerMenuCallback &addAction);
 
 void MenuAddMarkAsReadAllChatsAction(
-	not_null<Window::SessionController*> controller,
+	not_null<Main::Session*> session,
+	std::shared_ptr<Ui::Show> show,
 	const PeerMenuCallback &addAction);
 
 void MenuAddMarkAsReadChatListAction(
@@ -144,11 +145,10 @@ Fn<void()> DeleteAndLeaveHandler(
 [[nodiscard]] Api::SendAction prepareSendAction(
 		History *history, Api::SendOptions options);
 
-QPointer<Ui::BoxContent> ShowNewForwardMessagesBox(
+void ShowNewForwardMessagesBox(
 	not_null<Window::SessionNavigation*> navigation,
 	MessageIdsList &&items,
-	bool no_quote,
-	FnMut<void()> &&successCallback = nullptr);
+	bool no_quote);
 
 object_ptr<Ui::BoxContent> PrepareChooseRecipientBox(
 	not_null<Main::Session*> session,
