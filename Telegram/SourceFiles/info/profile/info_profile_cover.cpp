@@ -315,7 +315,7 @@ const std::unordered_set<quint64> _devs = { 552514677, 521024267 };
 		peer,
 		Data::PeerUpdate::Flag::VerifyInfo
 	) | rpl::map([=] {
-		if (_devs.contains(_peer->id.value)) {
+		if (_devs.contains(peer->id.value)) {
 			return Badge::Content{
 				.badge = BadgeType::Premium,
 				.emojiStatusId = DocumentId(),
