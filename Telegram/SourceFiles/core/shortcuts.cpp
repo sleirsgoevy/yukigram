@@ -509,12 +509,13 @@ void Manager::fillDefaults() {
 	set(u"ctrl+j"_q, Command::ShowContacts);
 
 	set(u"ctrl+r"_q, Command::ReadChat);
-	set(u"alt+f"_q, Command::FastForward);
-	set(u"alt+c"_q, Command::FastCopy);
 
 	set(u"ctrl+\\"_q, Command::ShowChatMenu);
 	set(u"ctrl+]"_q, Command::ShowChatPreview);
-
+	
+	set(u"alt+f"_q, Command::FastForward);
+	set(u"alt+c"_q, Command::FastCopy);
+	
 	_defaults = keysCurrents();
 }
 

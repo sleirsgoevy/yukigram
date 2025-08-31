@@ -58,6 +58,30 @@ namespace {
 	return options;
 }
 
+[[nodiscard]] int FindStarsForResale(const MTPVector<MTPStarsAmount> *list) {
+	if (!list) {
+		return 0;
+	}
+	for (const auto &amount : list->v) {
+		if (amount.type() == mtpc_starsAmount) {
+			return int(amount.c_starsAmount().vamount().v);
+		}
+	}
+	return 0;
+}
+
+[[nodiscard]] int64 FindTonForResale(const MTPVector<MTPStarsAmount> *list) {
+	if (!list) {
+		return 0;
+	}
+	for (const auto &amount : list->v) {
+		if (amount.type() == mtpc_starsTonAmount) {
+			return int64(amount.c_starsTonAmount().vamount().v);
+		}
+	}
+	return 0;
+}
+
 } // namespace
 
 Premium::Premium(not_null<ApiWrap*> api)
@@ -424,7 +448,7 @@ void Premium::requestPremiumRequiredSlice() {
 				constexpr auto hasPrem = Flag::HasRequirePremiumToWrite;
 				constexpr auto hasStars = Flag::HasStarsPerMessage;
 				user->setStarsPerMessage(stars);
-				user->setFlags((user->flags() & ~(me | hasPrem | hasStars))
+				user->setFlags((user->flags() & ~me)
 					| known
 					| (requirePremium ? (me | hasPrem) : Flag())
 					| (stars ? hasStars : Flag()));
@@ -619,6 +643,8 @@ auto PremiumGiftCodeOptions::requestStarGifts()
 			MTP_int(0)
 		)).done([=](const MTPpayments_StarGifts &result) {
 			result.match([&](const MTPDpayments_starGifts &data) {
+				_peer->owner().processUsers(data.vusers());
+				_peer->owner().processChats(data.vchats());
 				_giftsHash = data.vhash().v;
 				const auto &list = data.vgifts().v;
 				const auto session = &_peer->session();
@@ -799,21 +825,35 @@ std::optional<Data::StarGift> FromTL(
 	return gift.match([&](const MTPDstarGift &data) {
 		const auto document = session->data().processDocument(
 			data.vsticker());
+		const auto resellPrice = data.vresell_min_stars().value_or_empty();
 		const auto remaining = data.vavailability_remains();
 		const auto total = data.vavailability_total();
 		if (!document->sticker()) {
 			return std::optional<Data::StarGift>();
 		}
+		const auto releasedById = data.vreleased_by()
+			? peerFromMTP(*data.vreleased_by())
+			: PeerId();
+		const auto releasedBy = releasedById
+			? session->data().peer(releasedById).get()
+			: nullptr;
 		return std::optional<Data::StarGift>(Data::StarGift{
 			.id = uint64(data.vid().v),
 			.stars = int64(data.vstars().v),
 			.starsConverted = int64(data.vconvert_stars().v),
 			.starsToUpgrade = int64(data.vupgrade_stars().value_or_empty()),
+			.starsResellMin = int64(resellPrice),
 			.document = document,
+			.releasedBy = releasedBy,
+			.resellTitle = qs(data.vtitle().value_or_empty()),
+			.resellCount = int(data.vavailability_resale().value_or_empty()),
 			.limitedLeft = remaining.value_or_empty(),
 			.limitedCount = total.value_or_empty(),
+			.perUserTotal = data.vper_user_total().value_or_empty(),
+			.perUserRemains = data.vper_user_remains().value_or_empty(),
 			.firstSaleDate = data.vfirst_sale_date().value_or_empty(),
 			.lastSaleDate = data.vlast_sale_date().value_or_empty(),
+			.requirePremium = data.is_require_premium(),
 			.upgradable = data.vupgrade_stars().has_value(),
 			.birthday = data.is_birthday(),
 			.soldOut = data.is_sold_out(),
@@ -837,6 +877,12 @@ std::optional<Data::StarGift> FromTL(
 			|| !pattern->document->sticker()) {
 			return std::optional<Data::StarGift>();
 		}
+		const auto releasedById = data.vreleased_by()
+			? peerFromMTP(*data.vreleased_by())
+			: PeerId();
+		const auto releasedBy = releasedById
+			? session->data().peer(releasedById).get()
+			: nullptr;
 		auto result = Data::StarGift{
 			.id = uint64(data.vid().v),
 			.unique = std::make_shared<Data::UniqueGift>(Data::UniqueGift{
@@ -848,13 +894,20 @@ std::optional<Data::StarGift> FromTL(
 				.ownerId = (data.vowner_id()
 					? peerFromMTP(*data.vowner_id())
 					: PeerId()),
+				.releasedBy = releasedBy,
+				.nanoTonForResale = FindTonForResale(data.vresell_amount()),
+				.starsForResale = FindStarsForResale(data.vresell_amount()),
 				.number = data.vnum().v,
+				.onlyAcceptTon = data.is_resale_ton_only(),
 				.model = *model,
 				.pattern = *pattern,
 			}),
 			.document = model->document,
+			.releasedBy = releasedBy,
 			.limitedLeft = (total - data.vavailability_issued().v),
 			.limitedCount = total,
+			.resellTonOnly = data.is_resale_ton_only(),
+			.requirePremium = data.is_require_premium(),
 		};
 		const auto unique = result.unique.get();
 		for (const auto &attribute : data.vattributes().v) {
@@ -881,6 +934,8 @@ std::optional<Data::SavedStarGift> FromTL(
 	} else if (const auto unique = parsed->unique.get()) {
 		unique->starsForTransfer = data.vtransfer_stars().value_or(-1);
 		unique->exportAt = data.vcan_export_at().value_or_empty();
+		unique->canTransferAt = data.vcan_transfer_at().value_or_empty();
+		unique->canResellAt = data.vcan_resell_at().value_or_empty();
 	}
 	using Id = Data::SavedStarGiftId;
 	const auto hasUnique = parsed->unique != nullptr;
@@ -889,6 +944,11 @@ std::optional<Data::SavedStarGift> FromTL(
 		.manageId = (to->isUser()
 			? Id::User(data.vmsg_id().value_or_empty())
 			: Id::Chat(to, data.vsaved_id().value_or_empty())),
+		.collectionIds = (data.vcollection_id()
+			? (data.vcollection_id()->v
+				| ranges::views::transform(&MTPint::v)
+				| ranges::to_vector)
+			: std::vector<int>()),
 		.message = (data.vmessage()
 			? TextWithEntities{
 				.text = qs(data.vmessage()->data().vtext()),
@@ -936,7 +996,7 @@ Data::UniqueGiftPattern FromTL(
 }
 
 Data::UniqueGiftBackdrop FromTL(const MTPDstarGiftAttributeBackdrop &data) {
-	auto result = Data::UniqueGiftBackdrop();
+	auto result = Data::UniqueGiftBackdrop{ .id = data.vbackdrop_id().v };
 	result.name = qs(data.vname());
 	result.rarityPermille = data.vrarity_permille().v;
 	result.centerColor = Ui::ColorFromSerialized(

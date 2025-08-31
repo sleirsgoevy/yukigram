@@ -43,6 +43,8 @@ namespace Ui {
 class IconButton;
 class PopupMenu;
 class FlatLabel;
+class VerticalLayout;
+class RoundButton;
 struct ScrollToRequest;
 namespace Controls {
 enum class QuickDialogAction;
@@ -58,6 +60,7 @@ class ChatFilter;
 class Thread;
 class Folder;
 class Forum;
+class SavedMessages;
 struct ReactionId;
 } // namespace Data
 
@@ -85,6 +88,8 @@ enum class ChatTypeFilter : uchar;
 struct ChosenRow {
 	Key key;
 	Data::MessagePosition message;
+	MsgId topicJumpRootId;
+	PeerId sublistJumpPeerId;
 	QByteArray sponsoredRandomId;
 	bool userpicClick : 1 = false;
 	bool filteredRow : 1 = false;
@@ -164,7 +169,8 @@ public:
 	void chatPreviewShown(bool shown, RowDescriptor row = {});
 	bool chooseRow(
 		Qt::KeyboardModifiers modifiers = {},
-		MsgId pressedTopicRootId = {});
+		MsgId pressedTopicRootId = {},
+		PeerId pressedSublistPeerId = {});
 
 	void scrollToEntry(const RowDescriptor &entry);
 
@@ -544,6 +550,7 @@ private:
 	Row *_selected = nullptr;
 	Row *_pressed = nullptr;
 	MsgId _pressedTopicJumpRootId;
+	PeerId _pressedSublistJumpPeerId;
 	bool _selectedTopicJump = false;
 	bool _pressedTopicJump = false;
 
@@ -616,6 +623,8 @@ private:
 	object_ptr<SearchEmpty> _searchEmpty = { nullptr };
 	SearchState _searchEmptyState;
 	object_ptr<Ui::FlatLabel> _empty = { nullptr };
+	object_ptr<Ui::VerticalLayout> _emptyList = { nullptr };
+	object_ptr<Ui::RoundButton> _emptyButton = { nullptr };
 
 	Ui::DraggingScrollManager _draggingScroll;
 
@@ -670,7 +679,8 @@ private:
 	float64 _narrowRatio = 0.;
 	bool _geometryInited = false;
 
-	bool _savedSublists = false;
+	Data::SavedMessages *_savedSublists = nullptr;
+
 	bool _searchLoading = false;
 	bool _searchWaiting = false;
 

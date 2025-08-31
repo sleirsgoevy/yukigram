@@ -405,6 +405,20 @@ namespace Settings {
 
 		AddButtonWithIcon(
 			inner,
+			tr::lng_settings_show_view_as_json(),
+			st::settingsButtonNoIcon
+		)->toggleOn(
+			rpl::single(GetEnhancedBool("show_json"))
+		)->toggledChanges(
+		) | rpl::filter([=](bool toggled) {
+			return (toggled != GetEnhancedBool("show_json"));
+		}) | rpl::start_with_next([=](bool toggled) {
+			SetEnhancedValue("show_json", toggled);
+			EnhancedSettings::Write();
+		}, container->lifetime());
+
+		AddButtonWithIcon(
+			inner,
 			tr::lng_settings_hide_messages(),
 			st::settingsButtonNoIcon
 		)->toggleOn(

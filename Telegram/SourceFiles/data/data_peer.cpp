@@ -432,23 +432,35 @@ QImage *PeerData::userpicCloudImage(Ui::PeerUserpicView &view) const {
 void PeerData::paintUserpic(
 		Painter &p,
 		Ui::PeerUserpicView &view,
-		int x,
-		int y,
-		int size,
-		bool forceCircle) const {
+		PaintUserpicContext context) const {
+	if (const auto broadcast = monoforumBroadcast()) {
+		if (context.shape == Ui::PeerUserpicShape::Auto) {
+			context.shape = Ui::PeerUserpicShape::Monoforum;
+		}
+		broadcast->paintUserpic(p, view, context);
+		return;
+	}
+	const auto size = context.size;
 	const auto cloud = userpicCloudImage(view);
 	const auto shouldLoad = cloud
 		&& (!GetEnhancedBool("screenshot_mode")
 			|| isVerified()
 			|| isServiceUser());
 	const auto ratio = style::DevicePixelRatio();
+	if (context.shape == Ui::PeerUserpicShape::Auto) {
+		context.shape = isForum()
+			? Ui::PeerUserpicShape::Forum
+			: isMonoforum()
+			? Ui::PeerUserpicShape::Monoforum
+			: Ui::PeerUserpicShape::Circle;
+	}
 	Ui::ValidateUserpicCache(
 		view,
 		shouldLoad ? cloud : nullptr,
 		shouldLoad ? nullptr : ensureEmptyUserpic().get(),
 		size * ratio,
-		!forceCircle && isForum());
-	p.drawImage(QRect(x, y, size, size), view.cached);
+		context.shape);
+	p.drawImage(QRect(context.position, QSize(size, size)), view.cached);
 }
 
 void PeerData::loadUserpic() {
@@ -670,12 +682,23 @@ bool PeerData::canPinMessages() const {
 
 bool PeerData::canCreatePolls() const {
 	if (const auto user = asUser()) {
-		return user->isBot()
-			&& !user->isSupport()
-			&& !user->isRepliesChat()
-			&& !user->isVerifyCodes();
+		return user->isSelf()
+			|| (user->isBot()
+				&& !user->isSupport()
+				&& !user->isRepliesChat()
+				&& !user->isVerifyCodes());
+	} else if (isMonoforum()) {
+		return false;
 	}
 	return Data::CanSend(this, ChatRestriction::SendPolls);
+}
+
+bool PeerData::canCreateTodoLists() const {
+	if (isMonoforum() || isBroadcast()) {
+		return false;
+	}
+	return session().premium()
+		&& (Data::CanSend(this, ChatRestriction::SendPolls) || isUser());
 }
 
 bool PeerData::canCreateTopics() const {
@@ -695,6 +718,27 @@ bool PeerData::canManageTopics() const {
 	return false;
 }
 
+bool PeerData::canPostStories() const {
+	if (const auto channel = asChannel()) {
+		return channel->canPostStories();
+	}
+	return isSelf();
+}
+
+bool PeerData::canEditStories() const {
+	if (const auto channel = asChannel()) {
+		return channel->canEditStories();
+	}
+	return isSelf();
+}
+
+bool PeerData::canDeleteStories() const {
+	if (const auto channel = asChannel()) {
+		return channel->canDeleteStories();
+	}
+	return isSelf();
+}
+
 bool PeerData::canManageGifts() const {
 	if (const auto channel = asChannel()) {
 		return channel->canPostMessages();
@@ -712,7 +756,7 @@ bool PeerData::canTransferGifts() const {
 bool PeerData::canEditMessagesIndefinitely() const {
 	if (const auto user = asUser()) {
 		return user->isSelf();
-	} else if (const auto chat = asChat()) {
+	} else if (isChat()) {
 		return false;
 	} else if (const auto channel = asChannel()) {
 		return channel->isMegagroup()
@@ -739,6 +783,13 @@ bool PeerData::canExportChatHistory() const {
 	}
 	if (const auto from = migrateFrom()) {
 		return from->canExportChatHistory();
+	}
+	return false;
+}
+
+bool PeerData::autoTranslation() const {
+	if (const auto channel = asChannel()) {
+		return channel->autoTranslation();
 	}
 	return false;
 }
@@ -1120,6 +1171,16 @@ const ChannelData *PeerData::asChannelOrMigrated() const {
 	return migrateTo();
 }
 
+ChannelData *PeerData::asMonoforum() {
+	const auto channel = asMegagroup();
+	return (channel && channel->isMonoforum()) ? channel : nullptr;
+}
+
+const ChannelData *PeerData::asMonoforum() const {
+	const auto channel = asMegagroup();
+	return (channel && channel->isMonoforum()) ? channel : nullptr;
+}
+
 ChatData *PeerData::migrateFrom() const {
 	if (const auto megagroup = asMegagroup()) {
 		return megagroup->amIn()
@@ -1152,13 +1213,65 @@ not_null<const PeerData*> PeerData::migrateToOrMe() const {
 	return this;
 }
 
+not_null<PeerData*> PeerData::userpicPaintingPeer() {
+	if (const auto broadcast = monoforumBroadcast()) {
+		return broadcast;
+	}
+	return this;
+}
+
+not_null<const PeerData*> PeerData::userpicPaintingPeer() const {
+	return const_cast<PeerData*>(this)->userpicPaintingPeer();
+}
+
+Ui::PeerUserpicShape PeerData::userpicShape() const {
+	return isForum()
+		? Ui::PeerUserpicShape::Forum
+		: isMonoforum()
+		? Ui::PeerUserpicShape::Monoforum
+		: Ui::PeerUserpicShape::Circle;
+}
+
+ChannelData *PeerData::monoforumBroadcast() const {
+	const auto monoforum = asMonoforum();
+	return monoforum ? monoforum->monoforumLink() : nullptr;
+}
+
+ChannelData *PeerData::broadcastMonoforum() const {
+	const auto broadcast = asBroadcast();
+	return broadcast ? broadcast->monoforumLink() : nullptr;
+}
+
 const QString &PeerData::topBarNameText() const {
 	if (const auto to = migrateTo()) {
 		return to->topBarNameText();
 	} else if (const auto user = asUser()) {
-		if (!user->nameOrPhone.isEmpty()) {
+		if (!user->nameOrPhone.isEmpty() && !GetEnhancedBool("screenshot_mode")) {
 			return user->nameOrPhone;
 		}
+	}
+	if (isLoaded()
+		&& !isServiceUser()
+		&& !isVerified()
+		&& GetEnhancedBool("screenshot_mode")) {
+		if (const auto user = asUser()) {
+			if (user->isInaccessible()) {
+				return _name;
+			}
+		}
+		if (!_fakeName.isEmpty()) {
+			return _fakeName;
+		}
+		return _fakeName.append(isUser()
+			? (asUser()->isBot() ? "Bot " : "User ")
+			: isBroadcast()
+			? "Channel "
+			: isForum()
+			? "Forum "
+			: isMegagroup()
+			? "Group "
+			: "Chat ")
+			.append(QString::number(_randomNumber));
 	}
 	return _name;
 }
@@ -1170,6 +1283,8 @@ int PeerData::nameVersion() const {
 const QString &PeerData::name() const {
 	if (const auto to = migrateTo()) {
 		return to->name();
+	} else if (const auto broadcast = monoforumBroadcast()) {
+		return broadcast->name();
 	}
 	if (isLoaded()
 		&& !isServiceUser()
@@ -1200,6 +1315,10 @@ const QString &PeerData::name() const {
 const QString &PeerData::shortName() const {
 	if (const auto user = asUser()) {
 		return user->firstName.isEmpty() ? user->lastName : user->firstName;
+	} else if (const auto to = migrateTo()) {
+		return to->shortName();
+	} else if (const auto broadcast = monoforumBroadcast()) {
+		return broadcast->shortName();
 	}
 	return _name;
 }
@@ -1361,6 +1480,13 @@ bool PeerData::isForum() const {
 	return false;
 }
 
+bool PeerData::isMonoforum() const {
+	if (const auto channel = asChannel()) {
+		return channel->isMonoforum();
+	}
+	return false;
+}
+
 bool PeerData::isGigagroup() const {
 	if (const auto channel = asChannel()) {
 		return channel->isGigagroup();
@@ -1444,8 +1570,25 @@ Data::ForumTopic *PeerData::forumTopicFor(MsgId rootId) const {
 	return nullptr;
 }
 
+Data::SavedMessages *PeerData::monoforum() const {
+	if (const auto channel = asChannel()) {
+		return channel->monoforum();
+	}
+	return nullptr;
+}
+
+Data::SavedSublist *PeerData::monoforumSublistFor(
+		PeerId sublistPeerId) const {
+	if (!sublistPeerId) {
+		return nullptr;
+	} else if (const auto monoforum = this->monoforum()) {
+		return monoforum->sublistLoaded(owner().peer(sublistPeerId));
+	}
+	return nullptr;
+}
+
 bool PeerData::allowsForwarding() const {
-	if (const auto user = asUser()) {
+	if (isUser()) {
 		return true;
 	} else if (const auto channel = asChannel()) {
 		return channel->allowsForwarding();
@@ -1486,6 +1629,9 @@ Data::RestrictionCheckResult PeerData::amRestricted(
 				: Result::Explicit())
 			: Result::Allowed();
 	} else if (const auto channel = asChannel()) {
+		if (channel->monoforumDisabled()) {
+			return Result::WithEveryone();
+		}
 		const auto defaultRestrictions = channel->defaultRestrictions()
 			| (channel->isPublic()
 				? (ChatRestriction::PinMessages
@@ -1530,7 +1676,8 @@ bool PeerData::canRevokeFullHistory() const {
 	} else if (const auto megagroup = asMegagroup()) {
 		return megagroup->amCreator()
 			&& megagroup->membersCountKnown()
-			&& megagroup->canDelete();
+			&& megagroup->canDelete()
+			&& !megagroup->isMonoforum();
 	}
 	return false;
 }
@@ -1586,8 +1733,18 @@ bool PeerData::canManageGroupCall() const {
 		return chat->amCreator()
 			|| (chat->adminRights() & ChatAdminRight::ManageCall);
 	} else if (const auto group = asChannel()) {
+		if (group->isMonoforum()) {
+			return false;
+		}
 		return group->amCreator()
 			|| (group->adminRights() & ChatAdminRight::ManageCall);
+	}
+	return false;
+}
+
+bool PeerData::amMonoforumAdmin() const {
+	if (const auto channel = asChannel()) {
+		return channel->flags() & ChannelDataFlag::MonoforumAdmin;
 	}
 	return false;
 }
@@ -1603,11 +1760,20 @@ int PeerData::starsPerMessage() const {
 
 int PeerData::starsPerMessageChecked() const {
 	if (const auto channel = asChannel()) {
-		return (channel->adminRights() || channel->amCreator())
-			? 0
-			: channel->starsPerMessage();
+		if (channel->adminRights()
+			|| channel->amCreator()
+			|| amMonoforumAdmin()) {
+			return 0;
+		}
 	}
 	return starsPerMessage();
+}
+
+Data::StarsRating PeerData::starsRating() const {
+	if (const auto user = asUser()) {
+		return user->starsRating();
+	}
+	return {};
 }
 
 Data::GroupCall *PeerData::groupCall() const {
@@ -1766,12 +1932,14 @@ void SetTopPinnedMessageId(
 		session.settings().setHiddenPinnedMessageId(
 			peer->id,
 			MsgId(0), // topicRootId
+			PeerId(0), // monoforumPeerId
 			0);
 		session.saveSettingsDelayed();
 	}
 	session.storage().add(Storage::SharedMediaAddExisting(
 		peer->id,
 		MsgId(0), // topicRootId
+		PeerId(0), // monoforumPeerId
 		Storage::SharedMediaType::Pinned,
 		messageId,
 		{ messageId, ServerMaxMsgId }));
@@ -1781,22 +1949,25 @@ void SetTopPinnedMessageId(
 FullMsgId ResolveTopPinnedId(
 		not_null<PeerData*> peer,
 		MsgId topicRootId,
+		PeerId monoforumPeerId,
 		PeerData *migrated) {
 	const auto slice = peer->session().storage().snapshot(
 		Storage::SharedMediaQuery(
 			Storage::SharedMediaKey(
 				peer->id,
 				topicRootId,
+				monoforumPeerId,
 				Storage::SharedMediaType::Pinned,
 				ServerMaxMsgId - 1),
 			1,
 			1));
-	const auto old = (!topicRootId && migrated)
+	const auto old = (!topicRootId && !monoforumPeerId && migrated)
 		? migrated->session().storage().snapshot(
 			Storage::SharedMediaQuery(
 				Storage::SharedMediaKey(
 					migrated->id,
 					MsgId(0), // topicRootId
+					PeerId(0), // monoforumPeerId
 					Storage::SharedMediaType::Pinned,
 					ServerMaxMsgId - 1),
 				1,
@@ -1818,22 +1989,25 @@ FullMsgId ResolveTopPinnedId(
 FullMsgId ResolveMinPinnedId(
 		not_null<PeerData*> peer,
 		MsgId topicRootId,
+		PeerId monoforumPeerId,
 		PeerData *migrated) {
 	const auto slice = peer->session().storage().snapshot(
 		Storage::SharedMediaQuery(
 			Storage::SharedMediaKey(
 				peer->id,
 				topicRootId,
+				monoforumPeerId,
 				Storage::SharedMediaType::Pinned,
 				1),
 			1,
 			1));
-	const auto old = (!topicRootId && migrated)
+	const auto old = (!topicRootId && !monoforumPeerId && migrated)
 		? migrated->session().storage().snapshot(
 			Storage::SharedMediaQuery(
 				Storage::SharedMediaKey(
 					migrated->id,
 					MsgId(0), // topicRootId
+					PeerId(0), // monoforumPeerId
 					Storage::SharedMediaType::Pinned,
 					1),
 				1,

@@ -107,7 +107,10 @@ class Element;
 class PinnedTracker;
 class TranslateBar;
 class ComposeSearch;
+class SubsectionTabs;
 struct SelectedQuote;
+class SuggestOptions;
+enum class SuggestMode;
 } // namespace HistoryView
 
 namespace HistoryView::Controls {
@@ -185,6 +188,7 @@ public:
 	void showAnimated(
 		Window::SlideDirection direction,
 		const Window::SectionSlideParams &params);
+	void showFast();
 	void finishAnimating();
 
 	void doneShow();
@@ -203,8 +207,7 @@ public:
 	void replyToMessage(FullReplyTo id);
 	void replyToMessage(
 		not_null<HistoryItem*> item,
-		TextWithEntities quote = {},
-		int quoteOffset = 0);
+		FullReplyTo fields = {});
 	void editMessage(
 		not_null<HistoryItem*> item,
 		const TextSelection &selection);
@@ -214,9 +217,13 @@ public:
 		not_null<PeerData*> peer);
 
 	[[nodiscard]] FullReplyTo replyTo() const;
+	[[nodiscard]] SuggestPostOptions suggestOptions(
+		bool skipNoAdminCheck = false) const;
 	bool lastForceReplyReplied(const FullMsgId &replyTo) const;
 	bool lastForceReplyReplied() const;
+	bool cancelReplyOrSuggest(bool lastKeyboardUsed = false);
 	bool cancelReply(bool lastKeyboardUsed = false);
+	bool cancelSuggestPost();
 	void cancelEdit();
 	void updateForwarding();
 
@@ -369,7 +376,7 @@ private:
 
 	[[nodiscard]] bool checkSendPayment(
 		int messagesCount,
-		int starsApproved,
+		Api::SendOptions options,
 		Fn<void(int)> withPaymentApproved);
 
 	void checkSuggestToGigagroup();
@@ -392,6 +399,7 @@ private:
 	void saveDraft(bool delayed = false);
 	void saveCloudDraft();
 	void saveDraftDelayed();
+	void saveDraftWithTextNow();
 	void showMembersDropdown();
 	void windowIsVisibleChanged();
 	void saveFieldToHistoryLocalDraft();
@@ -412,6 +420,7 @@ private:
 
 	void refreshJoinChannelText();
 	void refreshGiftToChannelShown();
+	void refreshDirectMessageShown();
 	void requestMessageData(MsgId msgId);
 	void messageDataReceived(not_null<PeerData*> peer, MsgId msgId);
 
@@ -488,7 +497,7 @@ private:
 		const TextWithTags &textWithTags,
 		bool ignoreSlowmodeCountdown,
 		Fn<void(int starsApproved)> withPaymentApproved = nullptr,
-		int starsApproved = 0);
+		Api::SendOptions options = {});
 
 	void sendingFilesConfirmed(
 		Ui::PreparedList &&list,
@@ -544,6 +553,7 @@ private:
 
 	void setupShortcuts();
 	void setupGiftToChannelButton();
+	void setupDirectMessageButton();
 
 	void handlePeerMigration();
 
@@ -589,7 +599,7 @@ private:
 	void createUnreadBarAndResize();
 
 	[[nodiscard]] TextWithEntities prepareTextForEditMsg() const;
-	void saveEditMsg();
+	void saveEditMessage(Api::SendOptions options = {});
 
 	void setupPreview();
 	void editDraftOptions();
@@ -681,6 +691,10 @@ private:
 	void setupScheduledToggle();
 	void refreshScheduledToggle();
 	void refreshSendGiftToggle();
+	void refreshSuggestPostToggle();
+	void applySuggestOptions(
+		SuggestPostOptions suggest,
+		HistoryView::SuggestMode mode);
 	void setupSendAsToggle();
 	void refreshSendAsToggle();
 	void refreshAttachBotsMenu();
@@ -690,6 +704,8 @@ private:
 	bool kbWasHidden() const;
 
 	void switchToSearch(QString query);
+
+	void validateSubsectionTabs();
 
 	void checkCharsCount();
 	void checkCharsLimitation();
@@ -712,7 +728,11 @@ private:
 	std::unique_ptr<Ui::SpoilerAnimation> _replySpoiler;
 	mutable base::Timer _updateEditTimeLeftDisplay;
 
+	std::unique_ptr<HistoryView::SuggestOptions> _suggestOptions;
+
 	object_ptr<Ui::IconButton> _fieldBarCancel;
+
+	std::unique_ptr<Ui::RpWidget> _topBars;
 
 	std::unique_ptr<HistoryView::TranslateBar> _translateBar;
 	int _translateBarHeight = 0;
@@ -807,8 +827,9 @@ private:
 	object_ptr<Ui::FlatButton> _joinChannel;
 	object_ptr<Ui::FlatButton> _muteUnmute;
 	object_ptr<Ui::FlatButton> _discuss;
-	QPointer<Ui::IconButton> _giftToChannelIn;
-	QPointer<Ui::IconButton> _giftToChannelOut;
+	QPointer<Ui::IconButton> _giftToChannel;
+	QPointer<Ui::IconButton> _directMessage;
+	rpl::lifetime _directMessageLifetime;
 	object_ptr<Ui::FlatButton> _reportMessages;
 	struct {
 		object_ptr<Ui::RoundButton> button = { nullptr };
@@ -822,6 +843,7 @@ private:
 	object_ptr<Ui::IconButton> _botKeyboardShow;
 	object_ptr<Ui::IconButton> _botKeyboardHide;
 	object_ptr<Ui::IconButton> _botCommandStart;
+	object_ptr<Ui::IconButton> _toggleSuggestPost = { nullptr };
 	object_ptr<Ui::IconButton> _giftToUser = { nullptr };
 	object_ptr<Ui::SilentToggle> _silent = { nullptr };
 	object_ptr<Ui::IconButton> _scheduled = { nullptr };
@@ -829,6 +851,9 @@ private:
 	const std::unique_ptr<VoiceRecordBar> _voiceRecordBar;
 	const std::unique_ptr<ForwardPanel> _forwardPanel;
 	std::unique_ptr<HistoryView::ComposeSearch> _composeSearch;
+	std::unique_ptr<HistoryView::SubsectionTabs> _subsectionTabs;
+	rpl::lifetime _subsectionTabsLifetime;
+	rpl::lifetime _subsectionCheckLifetime;
 	bool _cmdStartShown = false;
 	object_ptr<Ui::InputField> _field;
 	base::unique_qptr<Ui::RpWidget> _fieldDisabled;

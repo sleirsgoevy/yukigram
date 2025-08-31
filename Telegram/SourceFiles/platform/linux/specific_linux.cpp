@@ -687,11 +687,6 @@ void start() {
 				+ cExeName();
 		}
 
-		if (false && !Core::UpdaterDisabled()) {
-			return u"sylfn.Yukigram._%1"_q.arg(
-				Core::Launcher::Instance().instanceHash().constData());
-		}
-
 		return u"sylfn.Yukigram"_q;
 	}());
 
@@ -767,7 +762,7 @@ bool OpenSystemSettings(SystemSettingsType type) {
 }
 
 void NewVersionLaunched(int oldVersion) {
-	if (oldVersion <= 4001001 && cAutoStart()) {
+	if (oldVersion <= 5014003 && cAutoStart()) {
 		AutostartToggle(true);
 	}
 }

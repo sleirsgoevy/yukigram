@@ -72,10 +72,18 @@ class BusinessInfo;
 struct ReactionId;
 struct UnavailableReason;
 struct CreditsStatusSlice;
+struct StarsRatingPending;
 struct UniqueGift;
 
 struct RepliesReadTillUpdate {
 	FullMsgId id;
+	MsgId readTillId;
+	bool out = false;
+};
+
+struct SublistReadTillUpdate {
+	ChannelId parentChatId;
+	PeerId sublistPeerId;
 	MsgId readTillId;
 	bool out = false;
 };
@@ -89,10 +97,18 @@ struct GiftUpdate {
 		Delete,
 		Pin,
 		Unpin,
+		ResaleChange,
 	};
 
 	Data::SavedStarGiftId id;
+	QString slug;
 	Action action = {};
+};
+struct GiftsUpdate {
+	not_null<PeerData*> peer;
+	int collectionId = 0;
+	std::vector<Data::SavedStarGiftId> added;
+	std::vector<Data::SavedStarGiftId> removed;
 };
 
 struct SentToScheduled {
@@ -230,22 +246,39 @@ public:
 
 	void registerGroupCall(not_null<GroupCall*> call);
 	void unregisterGroupCall(not_null<GroupCall*> call);
-	GroupCall *groupCall(CallId callId) const;
+	[[nodiscard]] GroupCall *groupCall(CallId callId) const;
+
+	[[nodiscard]] std::shared_ptr<GroupCall> sharedConferenceCall(
+		CallId id,
+		uint64 accessHash);
+	[[nodiscard]] std::shared_ptr<GroupCall> sharedConferenceCallFind(
+		const MTPUpdates &response);
 
 	void watchForOffline(not_null<UserData*> user, TimeId now = 0);
 	void maybeStopWatchForOffline(not_null<UserData*> user);
 
 	[[nodiscard]] auto invitedToCallUsers(CallId callId) const
-		-> const base::flat_set<not_null<UserData*>> &;
+		-> const base::flat_map<not_null<UserData*>, bool> &;
 	void registerInvitedToCallUser(
 		CallId callId,
 		not_null<PeerData*> peer,
-		not_null<UserData*> user);
-	void unregisterInvitedToCallUser(CallId callId, not_null<UserData*> user);
+		not_null<UserData*> user,
+		bool calling);
+	void registerInvitedToCallUser(
+		CallId callId,
+		GroupCall *call,
+		not_null<UserData*> user,
+		bool calling);
+	void unregisterInvitedToCallUser(
+		CallId callId,
+		not_null<UserData*> user,
+		bool onlyStopCalling);
 
 	struct InviteToCall {
 		CallId id = 0;
 		not_null<UserData*> user;
+		bool calling = false;
+		bool removed = false;
 	};
 	[[nodiscard]] rpl::producer<InviteToCall> invitesToCalls() const {
 		return _invitesToCalls.events();
@@ -308,6 +341,8 @@ public:
 	[[nodiscard]] rpl::producer<not_null<HistoryItem*>> newItemAdded() const;
 	void notifyGiftUpdate(GiftUpdate &&update);
 	[[nodiscard]] rpl::producer<GiftUpdate> giftUpdates() const;
+	void notifyGiftsUpdate(GiftsUpdate &&update);
+	[[nodiscard]] rpl::producer<GiftsUpdate> giftsUpdates() const;
 	void requestItemRepaint(not_null<const HistoryItem*> item);
 	[[nodiscard]] rpl::producer<not_null<const HistoryItem*>> itemRepaintRequest() const;
 	void requestViewRepaint(not_null<const ViewElement*> view);
@@ -510,6 +545,7 @@ public:
 	void requestDocumentViewRepaint(not_null<const DocumentData*> document);
 	void markMediaRead(not_null<const DocumentData*> document);
 	void requestPollViewRepaint(not_null<const PollData*> poll);
+	void requestTodoListViewRepaint(not_null<const TodoListData*> todolist);
 
 	void photoLoadProgress(not_null<PhotoData*> photo);
 	void photoLoadDone(not_null<PhotoData*> photo);
@@ -545,6 +581,10 @@ public:
 	void updateRepliesReadTill(RepliesReadTillUpdate update);
 	[[nodiscard]] auto repliesReadTillUpdates() const
 		-> rpl::producer<RepliesReadTillUpdate>;
+
+	void updateSublistReadTill(SublistReadTillUpdate update);
+	[[nodiscard]] auto sublistReadTillUpdates() const
+		-> rpl::producer<SublistReadTillUpdate>;
 
 	void selfDestructIn(not_null<HistoryItem*> item, crl::time delay);
 
@@ -660,6 +700,17 @@ public:
 	not_null<PollData*> processPoll(const MTPPoll &data);
 	not_null<PollData*> processPoll(const MTPDmessageMediaPoll &data);
 
+	[[nodiscard]] not_null<TodoListData*> todoList(TodoListId id);
+	not_null<TodoListData*> processTodoList(
+		TodoListId id,
+		const MTPTodoList &todolist);
+	not_null<TodoListData*> processTodoList(
+		TodoListId id,
+		const MTPDmessageMediaToDo &data);
+	[[nodiscard]] not_null<TodoListData*> duplicateTodoList(
+		TodoListId id,
+		not_null<TodoListData*> existing);
+
 	[[nodiscard]] not_null<CloudImage*> location(
 		const LocationPoint &point);
 
@@ -699,6 +750,12 @@ public:
 	void unregisterPollView(
 		not_null<const PollData*> poll,
 		not_null<ViewElement*> view);
+	void registerTodoListView(
+		not_null<const TodoListData*> todolist,
+		not_null<ViewElement*> view);
+	void unregisterTodoListView(
+		not_null<const TodoListData*> todolist,
+		not_null<ViewElement*> view);
 	void registerContactView(
 		UserId contactId,
 		not_null<ViewElement*> view);
@@ -728,8 +785,9 @@ public:
 	void notifyWebPageUpdateDelayed(not_null<WebPageData*> page);
 	void notifyGameUpdateDelayed(not_null<GameData*> game);
 	void notifyPollUpdateDelayed(not_null<PollData*> poll);
-	[[nodiscard]] bool hasPendingWebPageGamePollNotification() const;
-	void sendWebPageGamePollNotifications();
+	void notifyTodoListUpdateDelayed(not_null<TodoListData*> todolist);
+	[[nodiscard]] bool hasPendingWebPageGamePollTodoListNotification() const;
+	void sendWebPageGamePollTodoListNotifications();
 	[[nodiscard]] rpl::producer<not_null<WebPageData*>> webPageUpdates() const;
 
 	void channelDifferenceTooLong(not_null<ChannelData*> channel);
@@ -782,11 +840,6 @@ public:
 	void setMimeForwardIds(MessageIdsList &&list);
 	MessageIdsList takeMimeForwardIds();
 
-	void setTopPromoted(
-		History *promoted,
-		const QString &type,
-		const QString &message);
-
 	bool updateWallpapers(const MTPaccount_WallPapers &data);
 	void removeWallpaper(const WallPaper &paper);
 	const std::vector<WallPaper> &wallpapers() const;
@@ -815,6 +868,13 @@ public:
 	[[nodiscard]] rpl::producer<SentToScheduled> sentToScheduled() const;
 	void sentFromScheduled(SentFromScheduled value);
 	[[nodiscard]] rpl::producer<SentFromScheduled> sentFromScheduled() const;
+
+	void editStarsPerMessage(not_null<ChannelData*> channel, int count);
+	[[nodiscard]] int commonStarsPerMessage(
+		not_null<const ChannelData*> channel) const;
+
+	void setPendingStarsRating(StarsRatingPending value);
+	[[nodiscard]] StarsRatingPending pendingStarsRating() const;
 
 	void clearLocalStorage();
 
@@ -948,6 +1008,10 @@ private:
 	void setWallpapers(const QVector<MTPWallPaper> &data, uint64 hash);
 	void highlightProcessDone(uint64 processId);
 
+	void applyMonoforumLinkedId(
+		not_null<ChannelData*> channel,
+		ChannelId linkedId);
+
 	void checkPollsClosings();
 
 	const not_null<Main::Session*> _session;
@@ -956,7 +1020,7 @@ private:
 	Storage::DatabasePointer _bigFileCache;
 
 	TimeId _exportAvailableAt = 0;
-	QPointer<Ui::BoxContent> _exportSuggestion;
+	base::weak_qptr<Ui::BoxContent> _exportSuggestion;
 
 	rpl::variable<bool> _contactsLoaded = false;
 	rpl::variable<int> _groupFreeTranscribeLevel;
@@ -970,6 +1034,7 @@ private:
 	rpl::event_stream<not_null<const ViewElement*>> _viewLayoutChanges;
 	rpl::event_stream<not_null<HistoryItem*>> _newItemAdded;
 	rpl::event_stream<GiftUpdate> _giftUpdates;
+	rpl::event_stream<GiftsUpdate> _giftsUpdates;
 	rpl::event_stream<not_null<const HistoryItem*>> _itemRepaintRequest;
 	rpl::event_stream<not_null<const ViewElement*>> _viewRepaintRequest;
 	rpl::event_stream<not_null<const HistoryItem*>> _itemResizeRequest;
@@ -990,6 +1055,7 @@ private:
 	rpl::event_stream<ChatListEntryRefresh> _chatListEntryRefreshes;
 	rpl::event_stream<> _unreadBadgeChanges;
 	rpl::event_stream<RepliesReadTillUpdate> _repliesReadTillUpdates;
+	rpl::event_stream<SublistReadTillUpdate> _sublistReadTillUpdates;
 	rpl::event_stream<SentToScheduled> _sentToScheduled;
 	rpl::event_stream<SentFromScheduled> _sentFromScheduled;
 
@@ -1040,6 +1106,9 @@ private:
 	std::unordered_map<
 		PollId,
 		std::unique_ptr<PollData>> _polls;
+	std::map<
+		TodoListId,
+		std::unique_ptr<TodoListData>> _todoLists;
 	std::unordered_map<
 		GameId,
 		std::unique_ptr<GameData>> _games;
@@ -1052,6 +1121,9 @@ private:
 	std::unordered_map<
 		not_null<const PollData*>,
 		base::flat_set<not_null<ViewElement*>>> _pollViews;
+	std::unordered_map<
+		not_null<const TodoListData*>,
+		base::flat_set<not_null<ViewElement*>>> _todoListViews;
 	std::unordered_map<
 		UserId,
 		base::flat_set<not_null<HistoryItem*>>> _contactItems;
@@ -1068,6 +1140,7 @@ private:
 	base::flat_set<not_null<WebPageData*>> _webpagesUpdated;
 	base::flat_set<not_null<GameData*>> _gamesUpdated;
 	base::flat_set<not_null<PollData*>> _pollsUpdated;
+	base::flat_set<not_null<TodoListData*>> _todoListsUpdated;
 
 	rpl::event_stream<not_null<WebPageData*>> _webpageUpdates;
 	rpl::event_stream<not_null<ChannelData*>> _channelDifferenceTooLong;
@@ -1091,20 +1164,26 @@ private:
 
 	base::flat_set<not_null<ViewElement*>> _heavyViewParts;
 
-	base::flat_map<uint64, not_null<GroupCall*>> _groupCalls;
+	base::flat_map<CallId, not_null<GroupCall*>> _groupCalls;
+	base::flat_map<CallId, std::weak_ptr<GroupCall>> _conferenceCalls;
 	rpl::event_stream<InviteToCall> _invitesToCalls;
 	base::flat_map<
-		uint64,
-		base::flat_set<not_null<UserData*>>> _invitedToCallUsers;
+		CallId,
+		base::flat_map<not_null<UserData*>, bool>> _invitedToCallUsers;
 
 	base::flat_set<not_null<ViewElement*>> _shownSpoilers;
 	base::flat_map<
 		ReactionId,
 		base::flat_set<not_null<ViewElement*>>> _viewsByTag;
 
-	History *_topPromoted = nullptr;
-
 	std::unordered_map<PeerId, std::unique_ptr<PeerData>> _peers;
+
+	std::optional<base::flat_map<
+		not_null<ChannelData*>,
+		ChannelId>> _postponedMonoforumLinkedIds;
+
+	// This one from `channel`, not `channelFull`.
+	base::flat_map<not_null<const ChannelData*>, int> _commonStarsPerMessage;
 
 	MessageIdsList _mimeForwardIds;
 
@@ -1150,6 +1229,8 @@ private:
 	std::unique_ptr<ShortcutMessages> _shortcutMessages;
 
 	MsgId _nonHistoryEntryId = ShortcutMaxMsgId;
+
+	std::unique_ptr<StarsRatingPending> _pendingStarsRating;
 
 	rpl::lifetime _lifetime;
 

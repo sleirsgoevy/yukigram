@@ -11,6 +11,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "boxes/send_credits_box.h" // CreditsEmoji.
 #include "history/history.h"
 #include "history/history_item.h" // CreateMedia.
+#include "history/history_item_components.h"
 #include "history/history_location_manager.h"
 #include "history/view/history_view_element.h"
 #include "history/view/history_view_item_preview.h"
@@ -29,6 +30,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "history/view/media/history_view_web_page.h"
 #include "history/view/media/history_view_poll.h"
 #include "history/view/media/history_view_theme_document.h"
+#include "history/view/media/history_view_todo_list.h"
 #include "history/view/media/history_view_slot_machine.h"
 #include "history/view/media/history_view_dice.h"
 #include "history/view/media/history_view_service_box.h"
@@ -65,9 +67,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "data/data_file_origin.h"
 #include "data/data_stories.h"
 #include "data/data_story.h"
+#include "data/data_todo_list.h"
 #include "data/data_user.h"
 #include "main/main_session.h"
 #include "main/main_session_settings.h"
+#include "calls/calls_instance.h"
 #include "core/application.h"
 #include "core/click_handler_types.h" // ClickHandlerContext
 #include "lang/lang_keys.h"
@@ -221,8 +225,8 @@ template <typename MediaType>
 	Expects(media->owner()->hasThumbnail());
 
 	const auto document = media->owner();
-	const auto readyCacheKey = CountCacheKey(document, radius, spoiler);
 	if (const auto thumbnail = media->thumbnail()) {
+		const auto readyCacheKey = CountCacheKey(document, radius, spoiler);
 		return {
 			PreparePreviewImage(thumbnail, radius, spoiler),
 			readyCacheKey,
@@ -255,7 +259,8 @@ template <typename MediaType>
 		bool spoiler) {
 	auto result = PreparePhotoPreviewImage(item, media, radius, spoiler);
 	if (!result.data.isNull()
-		&& media->owner()->extendedMediaVideoDuration().has_value()) {
+		&& (media->owner()->extendedMediaVideoDuration().has_value()
+			|| (item->media() && item->media()->videoCover()))) {
 		result.data = PutPlayIcon(std::move(result.data));
 	}
 	return result;
@@ -455,28 +460,55 @@ Invoice ComputeInvoiceData(
 	return result;
 }
 
-Call ComputeCallData(const MTPDmessageActionPhoneCall &call) {
+Call ComputeCallData(
+		not_null<Session*> owner,
+		const MTPDmessageActionPhoneCall &call) {
 	auto result = Call();
-	result.finishReason = [&] {
+	result.state = [&] {
 		if (const auto reason = call.vreason()) {
 			return reason->match([](const MTPDphoneCallDiscardReasonBusy &) {
-				return CallFinishReason::Busy;
+				return CallState::Busy;
 			}, [](const MTPDphoneCallDiscardReasonDisconnect &) {
-				return CallFinishReason::Disconnected;
+				return CallState::Disconnected;
 			}, [](const MTPDphoneCallDiscardReasonHangup &) {
-				return CallFinishReason::Hangup;
+				return CallState::Hangup;
 			}, [](const MTPDphoneCallDiscardReasonMissed &) {
-				return CallFinishReason::Missed;
-			}, [](const MTPDphoneCallDiscardReasonAllowGroupCall &) {
-				return CallFinishReason::AllowGroupCall;
+				return CallState::Missed;
+			}, [](const MTPDphoneCallDiscardReasonMigrateConferenceCall &) {
+				return CallState::MigrateConferenceCall;
 			});
 			Unexpected("Call reason type.");
 		}
-		return CallFinishReason::Hangup;
+		return CallState::Hangup;
 	}();
 	result.duration = call.vduration().value_or_empty();
 	result.video = call.is_video();
 	return result;
+}
+
+Call ComputeCallData(
+		not_null<Session*> owner,
+		const MTPDmessageActionConferenceCall &call) {
+	auto participants = std::vector<not_null<PeerData*>>();
+	if (const auto list = call.vother_participants()) {
+		participants.reserve(list->v.size());
+		for (const auto &participant : list->v) {
+			participants.push_back(owner->peer(peerFromMTP(participant)));
+		}
+	}
+	return {
+		.otherParticipants = std::move(participants),
+		.conferenceId = call.vcall_id().v,
+		.duration = call.vduration().value_or_empty(),
+		.state = (call.vduration().value_or_empty()
+			? CallState::Hangup
+			: call.is_missed()
+			? CallState::Missed
+			: call.is_active()
+			? CallState::Active
+			: CallState::Invitation),
+		.video = call.is_video(),
+	};
 }
 
 GiveawayStart ComputeGiveawayStartData(
@@ -614,6 +646,10 @@ CloudImage *Media::location() const {
 }
 
 PollData *Media::poll() const {
+	return nullptr;
+}
+
+TodoListData *Media::todolist() const {
 	return nullptr;
 }
 
@@ -894,9 +930,9 @@ ItemPreview MediaPhoto::toPreview(ToPreviewOptions options) const {
 	const auto type = tr::lng_in_dlg_photo(tr::now);
 	const auto caption = (options.hideCaption || options.ignoreMessageText)
 		? TextWithEntities()
-		: options.translated
-		? parent()->translatedText()
-		: parent()->originalText();
+		: Dialogs::Ui::DialogsPreviewText(options.translated
+			? parent()->translatedText()
+			: parent()->originalText());
 	const auto hasMiniImages = !images.empty();
 	return {
 		.text = WithCaptionNotificationText(type, caption, hasMiniImages),
@@ -1111,7 +1147,7 @@ ItemPreview MediaFile::toPreview(ToPreviewOptions options) const {
 			return toGroupPreview(group->items, options);
 		}
 	}
-	if (const auto sticker = _document->sticker()) {
+	if (_document->sticker()) {
 		return Media::toPreview(options);
 	}
 	auto images = std::vector<ItemPreviewImage>();
@@ -1122,7 +1158,28 @@ ItemPreview MediaFile::toPreview(ToPreviewOptions options) const {
 	const auto radius = _document->isVideoMessage()
 		? ImageRoundRadius::Ellipse
 		: ImageRoundRadius::Small;
-	if (auto found = FindCachedPreview(
+	if (_videoCover) {
+		if (auto found = FindCachedPreview(
+				existing,
+				not_null{ _videoCover },
+				radius,
+				spoilered)) {
+			images.push_back(std::move(found));
+		} else {
+			const auto media = _videoCover->createMediaView();
+			if (auto prepared = PreparePhotoPreview(
+					parent(),
+					media,
+					radius,
+					_spoiler)
+				; prepared || !prepared.cacheKey) {
+				images.push_back(std::move(prepared));
+				if (!prepared.cacheKey) {
+					context = media;
+				}
+			}
+		}
+	} else if (auto found = FindCachedPreview(
 			existing,
 			_document,
 			radius,
@@ -1166,9 +1223,9 @@ ItemPreview MediaFile::toPreview(ToPreviewOptions options) const {
 	}();
 	const auto caption = (options.hideCaption || options.ignoreMessageText)
 		? TextWithEntities()
-		: options.translated
-		? parent()->translatedText()
-		: parent()->originalText();
+		: Dialogs::Ui::DialogsPreviewText(options.translated
+			? parent()->translatedText()
+			: parent()->originalText());
 	const auto hasMiniImages = !images.empty();
 	return {
 		.text = WithCaptionNotificationText(type, caption, hasMiniImages),
@@ -1178,7 +1235,7 @@ ItemPreview MediaFile::toPreview(ToPreviewOptions options) const {
 }
 
 TextWithEntities MediaFile::notificationText() const {
-	if (const auto sticker = _document->sticker()) {
+	if (_document->sticker()) {
 		const auto text = _emoji.isEmpty()
 			? tr::lng_in_dlg_sticker(tr::now)
 			: tr::lng_in_dlg_sticker_emoji(tr::now, lt_emoji, _emoji);
@@ -1210,7 +1267,7 @@ TextWithEntities MediaFile::notificationText() const {
 }
 
 QString MediaFile::pinnedTextSubstring() const {
-	if (const auto sticker = _document->sticker()) {
+	if (_document->sticker()) {
 		if (!_emoji.isEmpty()) {
 			return tr::lng_action_pinned_media_emoji_sticker(
 				tr::now,
@@ -1670,11 +1727,28 @@ std::unique_ptr<HistoryView::Media> MediaLocation::createView(
 MediaCall::MediaCall(not_null<HistoryItem*> parent, const Call &call)
 : Media(parent)
 , _call(call) {
-	parent->history()->owner().registerCallItem(parent);
+	const auto peer = parent->history()->peer;
+	peer->owner().registerCallItem(parent);
+	if (const auto user = _call.conferenceId ? peer->asUser() : nullptr) {
+		Core::App().calls().registerConferenceInvite(
+			_call.conferenceId,
+			user,
+			parent->id,
+			!parent->out());
+	}
 }
 
 MediaCall::~MediaCall() {
-	parent()->history()->owner().unregisterCallItem(parent());
+	const auto parent = this->parent();
+	const auto peer = parent->history()->peer;
+	peer->owner().unregisterCallItem(parent);
+	if (const auto user = _call.conferenceId ? peer->asUser() : nullptr) {
+		Core::App().calls().unregisterConferenceInvite(
+			_call.conferenceId,
+			user,
+			parent->id,
+			!parent->out());
+	}
 }
 
 std::unique_ptr<Media> MediaCall::clone(not_null<HistoryItem*> parent) {
@@ -1686,7 +1760,8 @@ const Call *MediaCall::call() const {
 }
 
 TextWithEntities MediaCall::notificationText() const {
-	auto result = Text(parent(), _call.finishReason, _call.video);
+	const auto conference = (_call.conferenceId != 0);
+	auto result = Text(parent(), _call.state, conference, _call.video);
 	if (_call.duration > 0) {
 		result = tr::lng_call_type_and_duration(
 			tr::now,
@@ -1727,26 +1802,39 @@ std::unique_ptr<HistoryView::Media> MediaCall::createView(
 
 QString MediaCall::Text(
 		not_null<HistoryItem*> item,
-		CallFinishReason reason,
+		CallState state,
+		bool conference,
 		bool video) {
-	if (item->out()) {
-		return ((reason == CallFinishReason::Missed)
-			? (video
+	if (state == CallState::Invitation) {
+		return tr::lng_call_invitation(tr::now);
+	} else if (state == CallState::Active) {
+		return tr::lng_call_ongoing(tr::now);
+	} else if (item->out()) {
+		return ((state == CallState::Missed)
+			? (conference
+				? tr::lng_call_group_declined
+				: video
 				? tr::lng_call_video_cancelled
 				: tr::lng_call_cancelled)
-			: (video
+			: (conference
+				? tr::lng_call_group_outgoing
+				: video
 				? tr::lng_call_video_outgoing
 				: tr::lng_call_outgoing))(tr::now);
-	} else if (reason == CallFinishReason::Missed) {
-		return (video
+	} else if (state == CallState::Missed) {
+		return (conference
+			? tr::lng_call_group_missed
+			: video
 			? tr::lng_call_video_missed
 			: tr::lng_call_missed)(tr::now);
-	} else if (reason == CallFinishReason::Busy) {
+	} else if (state == CallState::Busy) {
 		return (video
 			? tr::lng_call_video_declined
 			: tr::lng_call_declined)(tr::now);
 	}
-	return (video
+	return (conference
+		? tr::lng_call_group_incoming
+		: video
 		? tr::lng_call_video_incoming
 		: tr::lng_call_incoming)(tr::now);
 }
@@ -2140,9 +2228,9 @@ ItemPreview MediaInvoice::toPreview(ToPreviewOptions options) const {
 	const auto type = ComputeAlbumCountsString(counts);
 	const auto caption = (options.hideCaption || options.ignoreMessageText)
 		? TextWithEntities()
-		: options.translated
-		? parent()->translatedText()
-		: parent()->originalText();
+		: Dialogs::Ui::DialogsPreviewText(options.translated
+			? parent()->translatedText()
+			: parent()->originalText());
 	const auto hasMiniImages = !images.empty();
 	auto nice = Ui::Text::Colorized(
 		Ui::CreditsEmojiSmall(&parent()->history()->session()));
@@ -2254,6 +2342,74 @@ std::unique_ptr<HistoryView::Media> MediaPoll::createView(
 		not_null<HistoryItem*> realParent,
 		HistoryView::Element *replacing) {
 	return std::make_unique<HistoryView::Poll>(message, _poll);
+}
+
+MediaTodoList::MediaTodoList(
+	not_null<HistoryItem*> parent,
+	not_null<TodoListData*> todolist)
+: Media(parent)
+, _todolist(todolist) {
+}
+
+MediaTodoList::~MediaTodoList() {
+}
+
+std::unique_ptr<Media> MediaTodoList::clone(not_null<HistoryItem*> parent) {
+	const auto id = parent->fullId();
+	return std::make_unique<MediaTodoList>(
+		parent,
+		parent->history()->owner().duplicateTodoList(id, _todolist));
+}
+
+TodoListData *MediaTodoList::todolist() const {
+	return _todolist;
+}
+
+TextWithEntities MediaTodoList::notificationText() const {
+	return TextWithEntities()
+		.append(QChar(0x2611))
+		.append(QChar(' '))
+		.append(Ui::Text::Colorized(_todolist->title));
+}
+
+QString MediaTodoList::pinnedTextSubstring() const {
+	return QChar(171) + _todolist->title.text + QChar(187);
+}
+
+TextForMimeData MediaTodoList::clipboardText() const {
+	auto result = TextWithEntities();
+	result
+		.append(u"[ "_q)
+		.append(tr::lng_in_dlg_todo_list(tr::now))
+		.append(u" : "_q)
+		.append(_todolist->title)
+		.append(u" ]"_q);
+	for (const auto &item : _todolist->items) {
+		result.append(u"\n- "_q).append(item.text);
+	}
+	return TextForMimeData::Rich(std::move(result));
+}
+
+bool MediaTodoList::allowsEdit() const {
+	return parent()->out();
+}
+
+bool MediaTodoList::updateInlineResultMedia(const MTPMessageMedia &media) {
+	return false;
+}
+
+bool MediaTodoList::updateSentMedia(const MTPMessageMedia &media) {
+	return false;
+}
+
+std::unique_ptr<HistoryView::Media> MediaTodoList::createView(
+		not_null<HistoryView::Element*> message,
+		not_null<HistoryItem*> realParent,
+		HistoryView::Element *replacing) {
+	return std::make_unique<HistoryView::TodoList>(
+		message,
+		_todolist,
+		replacing);
 }
 
 MediaDice::MediaDice(not_null<HistoryItem*> parent, QString emoji, int value)
@@ -2381,7 +2537,7 @@ MediaGiftBox::MediaGiftBox(
 	not_null<HistoryItem*> parent,
 	not_null<PeerData*> from,
 	GiftType type,
-	int count)
+	int64 count)
 : MediaGiftBox(parent, from, GiftCode{ .count = count, .type = type }) {
 }
 
@@ -2435,7 +2591,9 @@ std::unique_ptr<HistoryView::Media> MediaGiftBox::createView(
 			message,
 			HistoryView::GenerateUniqueGiftMedia(message, replacing, unique),
 			HistoryView::MediaGenericDescriptor{
-				.maxWidth = st::msgServiceGiftBoxSize.width(),
+				.maxWidth = (_data.stargiftReleasedBy
+					? st::msgServiceStarGiftByWidth
+					: st::msgServiceGiftBoxSize.width()),
 				.paintBg = HistoryView::UniqueGiftBg(message, unique),
 				.service = true,
 			});

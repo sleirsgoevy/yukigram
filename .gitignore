@@ -20,6 +20,7 @@ ipch/
 .vs/
 .vscode/
 .cache/
+compile_commands.json
 
 /Telegram/log.txt
 /Telegram/data
@@ -52,5 +53,16 @@ stage
 *.*~
 .idea/
 cmake-build-debug/
+
+# Local configuration files
 .ccls-cache
 yuki-build.sh
+settings.local.json
+*.local.json
+.env
+.env.local
+.env.*.local
+
+# Cursor IDE local settings (but keep .cursor/rules/)
+.cursor/*
+!.cursor/rules/
