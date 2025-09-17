@@ -97,8 +97,9 @@ jobs:
           pkgrel=$pkgrel
           pkgdesc="Yukigram (Telegram Desktop fork) messaging app"
           depends="\$depends ada"
-          source="\${source/https:*.tar.gz/yukigram.tar.gz}"
+          source="\${source//https:*-full.tar.gz/yukigram.tar.gz}"
           builddir="\$srcdir/$REPO_NAME"
+          unset maintainer
           EOF
           tar -czf pmaports/temp/yukigram/yukigram.tar.gz "$REPO_NAME"
 
