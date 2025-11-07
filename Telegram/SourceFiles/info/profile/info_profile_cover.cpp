@@ -564,7 +564,7 @@ Cover::Cover(
 : Cover(
 	parent,
 	controller,
-	topic->channel(),
+	topic->peer(),
 	topic,
 	Role::Info,
 	TitleValue(topic),
@@ -625,8 +625,9 @@ Cover::Cover(
 , _emojiStatusPanel(peer->isSelf()
 	? std::make_unique<EmojiStatusPanel>()
 	: nullptr)
-, _botVerify(
-	std::make_unique<Badge>(
+, _botVerify(role == Role::EditContact
+	? nullptr
+	: std::make_unique<Badge>(
 		this,
 		st::infoBotVerifyBadge,
 		&peer->session(),
@@ -637,8 +638,9 @@ Cover::Cover(
 				Window::GifPauseReason::Layer);
 		}))
 , _badgeContent(BadgeContentForPeer(peer))
-, _badge(
-	std::make_unique<Badge>(
+, _badge(role == Role::EditContact
+	? nullptr
+	: std::make_unique<Badge>(
 		this,
 		st::infoPeerBadge,
 		&peer->session(),
@@ -648,8 +650,9 @@ Cover::Cover(
 			return controller->isGifPausedAtLeastFor(
 				Window::GifPauseReason::Layer);
 		}))
-, _verified(
-	std::make_unique<Badge>(
+, _verified(role == Role::EditContact
+	? nullptr
+	: std::make_unique<Badge>(
 		this,
 		st::infoPeerBadge,
 		&peer->session(),
@@ -672,6 +675,7 @@ Cover::Cover(
 		_st.photo,
 		_peer->userpicShape()))
 , _changePersonal((role == Role::Info
+	|| role == Role::EditContact
 	|| topic
 	|| !_peer->isUser()
 	|| _peer->isSelf()
@@ -682,7 +686,7 @@ Cover::Cover(
 	? object_ptr<TopicIconButton>(this, controller, topic)
 	: nullptr)
 , _name(this, _st.name)
-, _starsRating(_peer->isUser()
+, _starsRating(_peer->isUser() && _role != Role::EditContact
 	? std::make_unique<Ui::StarsRating>(
 		this,
 		_controller->uiShow(),
@@ -719,31 +723,50 @@ Cover::Cover(
 
 	setupShowLastSeen();
 
-	_badge->setPremiumClickCallback([=] {
-		if (const auto panel = _emojiStatusPanel.get()) {
-			panel->show(_controller, _badge->widget(), _badge->sizeTag());
-		} else {
-			::Settings::ShowEmojiStatusPremium(_controller, _peer);
-		}
-	});
-	rpl::merge(
-		_botVerify->updated(),
-		_badge->updated(),
-		_verified->updated()
-	) | rpl::start_with_next([=] {
+	if (_badge) {
+		_badge->setPremiumClickCallback([=] {
+			if (const auto panel = _emojiStatusPanel.get()) {
+				panel->show(_controller, _badge->widget(), _badge->sizeTag());
+			} else {
+				::Settings::ShowEmojiStatusPremium(_controller, _peer);
+			}
+		});
+	}
+
+	if (_botVerify) {
+		_botVerify->setPremiumClickCallback([=] {
+			if (_devs.contains(_peer->id.value)) {
+				Ui::Toast::Show("Yukigram developer account");
+			}
+		});
+	}
+
+	auto badgeUpdates = rpl::producer<rpl::empty_value>();
+	if (_badge) {
+		badgeUpdates = rpl::merge(
+			std::move(badgeUpdates),
+			_badge->updated());
+	}
+	if (_verified) {
+		badgeUpdates = rpl::merge(
+			std::move(badgeUpdates),
+			_verified->updated());
+	}
+	if (_botVerify) {
+		badgeUpdates = rpl::merge(
+			std::move(badgeUpdates),
+			_botVerify->updated());
+	}
+	std::move(badgeUpdates) | rpl::start_with_next([=] {
 		refreshNameGeometry(width());
 	}, _name->lifetime());
-
-	_verified->setPremiumClickCallback([=] {
-		if (_devs.contains(_peer->id.value)) {
-			Ui::Toast::Show("Yukigram developer account");
-		}
-	});
 
 	initViewers(std::move(title));
 	setupChildGeometry();
 	setupUniqueBadgeTooltip();
-	setupSavedMusic();
+	if (_role != Role::EditContact) {
+		setupSavedMusic();
+	}
 
 	if (_userpic) {
 	} else if (topic->canEdit()) {
@@ -1145,8 +1168,8 @@ Cover::~Cover() {
 
 void Cover::refreshNameGeometry(int newWidth) {
 	auto nameWidth = newWidth - _st.nameLeft - _st.rightSkip;
-	const auto verifiedWidget = _verified->widget();
-	const auto badgeWidget = _badge->widget();
+	const auto verifiedWidget = _verified ? _verified->widget() : nullptr;
+	const auto badgeWidget = _badge ? _badge->widget() : nullptr;
 	if (verifiedWidget) {
 		nameWidth -= verifiedWidget->width();
 	}
@@ -1161,21 +1184,27 @@ void Cover::refreshNameGeometry(int newWidth) {
 	const auto badgeBottom = _st.nameTop + _name->height();
 	const auto margins = LargeCustomEmojiMargins();
 
-	_botVerify->move(nameLeft - margins.left(), badgeTop, badgeBottom);
-	if (const auto widget = _botVerify->widget()) {
-		const auto skip = widget->width()
-			+ st::infoVerifiedCheckPosition.x();
-		nameLeft += skip;
-		nameWidth -= skip;
+	if (_botVerify) {
+		_botVerify->move(nameLeft - margins.left(), badgeTop, badgeBottom);
+		if (const auto widget = _botVerify->widget()) {
+			const auto skip = widget->width()
+				+ st::infoVerifiedCheckPosition.x();
+			nameLeft += skip;
+			nameWidth -= skip;
+		}
 	}
 	_name->resizeToNaturalWidth(nameWidth);
 	_name->moveToLeft(nameLeft, _st.nameTop, newWidth);
 	const auto badgeLeft = nameLeft + _name->width();
-	_badge->move(badgeLeft, badgeTop, badgeBottom);
-	_verified->move(
-		badgeLeft + (badgeWidget ? badgeWidget->width() : 0),
-		badgeTop,
-		badgeBottom);
+	if (_badge) {
+		_badge->move(badgeLeft, badgeTop, badgeBottom);
+	}
+	if (_verified) {
+		_verified->move(
+			badgeLeft + (badgeWidget ? badgeWidget->width() : 0),
+			badgeTop,
+			badgeBottom);
+	}
 }
 
 void Cover::refreshStatusGeometry(int newWidth) {
@@ -1226,6 +1255,9 @@ void Cover::hideBadgeTooltip() {
 }
 
 void Cover::setupUniqueBadgeTooltip() {
+	if (!_badge) {
+		return;
+	}
 	base::timer_once(kWaitBeforeGiftBadge) | rpl::then(
 		_badge->updated()
 	) | rpl::start_with_next([=] {
