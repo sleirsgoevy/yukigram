@@ -153,6 +153,8 @@ public:
 
 	[[nodiscard]] FnMut<void()> addAsyncWaiter();
 
+	void registerVideoStream(not_null<GroupCall*> call);
+
 	[[nodiscard]] bool isSharingScreen() const;
 	[[nodiscard]] bool isQuitPrevent();
 
@@ -225,6 +227,10 @@ private:
 
 	const std::unique_ptr<base::Platform::SystemMediaControls> _controls;
 	rpl::lifetime _lifetime;
+
+	base::flat_map<
+		not_null<Main::Session*>,
+		std::vector<base::weak_ptr<GroupCall>>> _streams;
 
 };
 

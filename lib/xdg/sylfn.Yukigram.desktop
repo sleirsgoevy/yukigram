@@ -2,7 +2,7 @@
 Name=Yukigram
 Comment=Unofficial desktop version of Telegram messaging app
 TryExec=yukigram
-Exec=yukigram -- %u
+Exec=yukigram -- %U
 Icon=sylfn.Yukigram
 Terminal=false
 StartupWMClass=sylfn.Yukigram

@@ -190,7 +190,7 @@ Instance::Instance()
 
 	using Command = base::Platform::SystemMediaControls::Command;
 
-	_controls->commandRequests() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::start_with_next([=](Command command) {
+	_controls->commandRequests() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::on_next([=](Command command) {
 		switch (command) {
 		case Command::PlayPause: [[fallthrough]];
 		case Command::Play: [[fallthrough]];
@@ -243,7 +243,7 @@ Instance::Instance()
 		}
 	};
 
-	currentCallValue() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::start_with_next([=](Call *current_call) {
+	currentCallValue() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::on_next([=](Call *current_call) {
 		setup_controls(current_call);
 		if (!current_call) {
 			return;
@@ -256,10 +256,10 @@ Instance::Instance()
 		set_title(user->username(), user->id, user->firstName);
 		update_call_state(current_call->state());
 
-		current_call->stateValue() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::start_with_next(update_call_state, current_call->lifetime());
+		current_call->stateValue() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::on_next(update_call_state, current_call->lifetime());
 	}, _lifetime);
 
-	currentGroupCallValue() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::start_with_next([=](GroupCall *current_call) {
+	currentGroupCallValue() | rpl::filter([](auto unused) { return GetEnhancedBool("mpris_call_hangup"); }) | rpl::on_next([=](GroupCall *current_call) {
 		setup_controls(current_call);
 		if (!current_call) {
 			return;
@@ -346,7 +346,7 @@ void Instance::startOrJoinConferenceCall(StartConferenceInfo args) {
 	const auto raw = call.get();
 
 	session->account().sessionChanges(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		destroyGroupCall(raw);
 	}, raw->lifetime());
 
@@ -382,7 +382,7 @@ void Instance::startedConferenceReady(
 		migrationInfo);
 	_currentGroupCall = std::move(_startingGroupCall);
 	_currentGroupCallChanges.fire_copy(call);
-	const auto real = call->conferenceCall().get();
+	const auto real = call->sharedCall().get();
 	const auto link = real->conferenceInviteLink();
 	const auto slug = Group::ExtractConferenceSlug(link);
 	finishConferenceInvitations(args);
@@ -519,7 +519,7 @@ void Instance::createCall(
 		const auto raw = call.get();
 
 		user->session().account().sessionChanges(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			destroyCall(raw);
 		}, raw->lifetime());
 
@@ -533,7 +533,7 @@ void Instance::createCall(
 		}
 		if (raw->state() == Call::State::WaitingUserConfirmation) {
 			_currentCallPanel->startOutgoingRequests(
-			) | rpl::start_with_next([=](bool video) {
+			) | rpl::on_next([=](bool video) {
 				repeater.callback(video, true, repeater);
 			}, raw->lifetime());
 		} else {
@@ -575,7 +575,7 @@ void Instance::createGroupCall(
 	const auto raw = call.get();
 
 	info.peer->session().account().sessionChanges(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		destroyGroupCall(raw);
 	}, raw->lifetime());
 
@@ -687,6 +687,10 @@ void Instance::handleUpdate(
 		handleGroupCallUpdate(session, update);
 	}, [&](const MTPDupdateGroupCallEncryptedMessage &data) {
 		handleGroupCallUpdate(session, update);
+	}, [&](const MTPDupdateDeleteGroupCallMessages &data) {
+		handleGroupCallUpdate(session, update);
+	}, [&](const MTPDupdateMessageID &data) {
+		handleGroupCallUpdate(session, update);
 	}, [](const auto &) {
 		Unexpected("Update type in Calls::Instance::handleUpdate.");
 	});
@@ -722,6 +726,10 @@ FnMut<void()> Instance::addAsyncWaiter() {
 			}
 		});
 	};
+}
+
+void Instance::registerVideoStream(not_null<GroupCall*> call) {
+	_streams[&call->peer()->session()].push_back(call);
 }
 
 bool Instance::isSharingScreen() const {
@@ -794,6 +802,35 @@ void Instance::handleCallUpdate(
 void Instance::handleGroupCallUpdate(
 		not_null<Main::Session*> session,
 		const MTPUpdate &update) {
+	if (const auto i = _streams.find(session); i != end(_streams)) {
+		for (auto j = begin(i->second); j != end(i->second);) {
+			if (const auto strong = j->get()) {
+				update.match([&](const MTPDupdateGroupCall &data) {
+					strong->handlePossibleCreateOrJoinResponse(data);
+					strong->handleUpdate(update);
+				}, [&](const MTPDupdateGroupCallConnection &data) {
+					strong->handlePossibleCreateOrJoinResponse(data);
+				}, [&](const MTPDupdateGroupCallMessage &data) {
+					strong->handleIncomingMessage(data);
+				}, [&](const MTPDupdateGroupCallEncryptedMessage &data) {
+					strong->handleIncomingMessage(data);
+				}, [&](const MTPDupdateDeleteGroupCallMessages &data) {
+					strong->handleDeleteMessages(data);
+				}, [&](const MTPDupdateMessageID &data) {
+					strong->handleMessageSent(data);
+				}, [&](const MTPDupdateGroupCallParticipants &data) {
+					strong->handleUpdate(update);
+				}, [&](const MTPDupdateGroupCallChainBlocks &data) {
+					strong->handleUpdate(update);
+				}, [](const auto &) {
+				});
+				++j;
+			} else {
+				j = i->second.erase(j);
+			}
+		}
+	}
+
 	const auto groupCall = _currentGroupCall
 		? _currentGroupCall.get()
 		: _startingGroupCall.get();
@@ -806,13 +843,19 @@ void Instance::handleGroupCallUpdate(
 			groupCall->handleIncomingMessage(data);
 		}, [&](const MTPDupdateGroupCallEncryptedMessage &data) {
 			groupCall->handleIncomingMessage(data);
+		}, [&](const MTPDupdateDeleteGroupCallMessages &data) {
+			groupCall->handleDeleteMessages(data);
+		}, [&](const MTPDupdateMessageID &data) {
+			groupCall->handleMessageSent(data);
 		}, [](const auto &) {
 		});
 	}
 
 	if (update.type() == mtpc_updateGroupCallConnection
 		|| update.type() == mtpc_updateGroupCallMessage
-		|| update.type() == mtpc_updateGroupCallEncryptedMessage) {
+		|| update.type() == mtpc_updateGroupCallEncryptedMessage
+		|| update.type() == mtpc_updateDeleteGroupCallMessages
+		|| update.type() == mtpc_updateMessageID) {
 		return;
 	}
 	const auto callId = update.match([](const MTPDupdateGroupCall &data) {
@@ -1207,7 +1250,7 @@ void Instance::showConferenceInvite(
 		return;
 	} else if (inGroupCall()
 		&& _currentGroupCall->conference()
-		&& _currentGroupCall->conferenceCall()->id() == conferenceId) {
+		&& _currentGroupCall->sharedCall()->id() == conferenceId) {
 		return;
 	}
 
@@ -1235,7 +1278,7 @@ void Instance::showConferenceInvite(
 		const auto raw = call.get();
 
 		user->session().account().sessionChanges(
-		) | rpl::start_with_next([=] {
+		) | rpl::on_next([=] {
 			destroyCall(raw);
 		}, raw->lifetime());
 

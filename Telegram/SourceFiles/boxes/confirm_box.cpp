@@ -242,7 +242,7 @@ void ConfirmBox::prepare() {
 			[=] { _cancelled = true; closeBox(); });
 	}
 
-	boxClosing() | rpl::start_with_next([=] {
+	boxClosing() | rpl::on_next([=] {
 		if (!_confirmed && (!_strictCancel || _cancelled)) {
 			if (auto callback = std::move(_cancelledCallback)) {
 				callback();
@@ -397,7 +397,7 @@ void MaxInviteBox::prepare() {
 	_channel->session().changes().peerUpdates(
 		_channel,
 		Data::PeerUpdate::Flag::InviteLinks
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		rtlupdate(_invitationLink);
 	}, lifetime());
 }
@@ -622,7 +622,7 @@ void DeleteMessagesBox::prepare() {
 			appendDetails(std::move(revoke->description));
 			if (!peer->isUser() && !_wipeHistoryJustClear) {
 				_revoke->checkedValue(
-				) | rpl::start_with_next([=](bool revokeForAll) {
+				) | rpl::on_next([=](bool revokeForAll) {
 					*deleteText = revokeForAll
 						? tr::lng_box_delete()
 						: tr::lng_box_leave();

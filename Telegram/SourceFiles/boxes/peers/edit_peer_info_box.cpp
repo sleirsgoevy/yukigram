@@ -157,7 +157,7 @@ not_null<Ui::SettingsButton*> AddButtonWithText(
 	return AddButtonWithText(
 		parent,
 		std::move(text),
-		std::move(label) | Ui::Text::ToWithEntities(),
+		std::move(label) | rpl::map(tr::marked),
 		std::move(callback),
 		std::move(descriptor));
 }
@@ -184,7 +184,7 @@ void SaveDefaultRestrictions(
 
 	const auto requestId = api->request(
 		MTPmessages_EditChatDefaultBannedRights(
-			peer->input,
+			peer->input(),
 			RestrictionsToMTP({ rights, 0 }))
 	).done([=](const MTPUpdates &result) {
 		api->clearModifyRequest(key);
@@ -216,7 +216,7 @@ void SaveSlowmodeSeconds(
 	const auto key = Api::RequestKey("slowmode_seconds", channel->id);
 
 	const auto requestId = api->request(MTPchannels_ToggleSlowMode(
-		channel->inputChannel,
+		channel->inputChannel(),
 		MTP_int(seconds)
 	)).done([=](const MTPUpdates &result) {
 		api->clearModifyRequest(key);
@@ -251,7 +251,7 @@ void SaveStarsPerMessage(
 		MTP_flags(broadcastAllowed
 			? Flag::f_broadcast_messages_allowed
 			: Flag(0)),
-		channel->inputChannel,
+		channel->inputChannel(),
 		MTP_long(starsPerMessage)
 	)).done([=](const MTPUpdates &result) {
 		api->clearModifyRequest(key);
@@ -286,7 +286,7 @@ void SaveBoostsUnrestrict(
 	const auto key = Api::RequestKey("boosts_unrestrict", channel->id);
 	const auto requestId = api->request(
 		MTPchannels_SetBoostsToUnblockRestrictions(
-			channel->inputChannel,
+			channel->inputChannel(),
 			MTP_int(boostsUnrestrict))
 	).done([=](const MTPUpdates &result) {
 		api->clearModifyRequest(key);
@@ -613,11 +613,11 @@ object_ptr<Ui::RpWidget> Controller::createPhotoAndTitleEdit() {
 		container,
 		createTitleEdit());
 	photoWrap->heightValue(
-	) | rpl::start_with_next([container](int height) {
+	) | rpl::on_next([container](int height) {
 		container->resize(container->width(), height);
 	}, photoWrap->lifetime());
 	container->widthValue(
-	) | rpl::start_with_next([titleEdit](int width) {
+	) | rpl::on_next([titleEdit](int width) {
 		const auto left = st::editPeerPhotoMargins.left()
 			+ st::defaultUserpicButton.size.width();
 		titleEdit->resizeToWidth(width - left);
@@ -672,7 +672,7 @@ object_ptr<Ui::RpWidget> Controller::createTitleEdit() {
 		&_peer->session());
 
 	result->entity()->submits(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		submitTitle();
 	}, result->entity()->lifetime());
 
@@ -702,7 +702,7 @@ object_ptr<Ui::RpWidget> Controller::createTitleEdit() {
 		emojiPanel->hide();
 		emojiPanel->selector()->setCurrentPeer(_peer);
 		emojiPanel->selector()->emojiChosen(
-		) | rpl::start_with_next([=](ChatHelpers::EmojiChosen data) {
+		) | rpl::on_next([=](ChatHelpers::EmojiChosen data) {
 			Ui::InsertEmojiAtCursor(field->textCursor(), data.emoji);
 			field->setFocus();
 		}, field->lifetime());
@@ -736,7 +736,7 @@ object_ptr<Ui::RpWidget> Controller::createTitleEdit() {
 			});
 		}());
 
-		field->widthValue() | rpl::start_with_next([=](int width) {
+		field->widthValue() | rpl::on_next([=](int width) {
 			const auto &p = st::editPeerTitleEmojiPosition;
 			emojiToggle->moveToRight(p.x(), p.y(), width);
 			updateEmojiPanelGeometry();
@@ -782,7 +782,7 @@ object_ptr<Ui::RpWidget> Controller::createDescriptionEdit() {
 		&_peer->session());
 
 	result->entity()->submits(
-	) | rpl::start_with_next([=] {
+	) | rpl::on_next([=] {
 		submitDescription();
 	}, result->entity()->lifetime());
 
@@ -896,7 +896,7 @@ void Controller::showEditPeerTypeBox(
 			_typeDataSavedValue,
 			error));
 	box->boxClosing(
-	) | rpl::start_with_next([peer = _peer] {
+	) | rpl::on_next([peer = _peer] {
 		peer->session().api().usernames().requestToCache(peer);
 	}, box->lifetime());
 }
@@ -1072,13 +1072,13 @@ void Controller::fillDiscussionLinkButton() {
 		? _discussionLinkUpdates.events(
 		) | rpl::map([](ChannelData *chat) {
 			return chat ? chat->name() : QString();
-		}) | rpl::type_erased()
+		}) | rpl::type_erased
 		: rpl::combine(
 			tr::lng_manage_discussion_group_add(),
 			_discussionLinkUpdates.events()
 		) | rpl::map([=](const QString &add, ChannelData *chat) {
 			return chat ? chat->name() : add;
-		}) | rpl::type_erased();
+		}) | rpl::type_erased;
 	AddButtonWithText(
 		_controls.buttonsLayout,
 		std::move(text),
@@ -1101,9 +1101,9 @@ void Controller::fillDirectMessagesButton() {
 	auto label = _starsPerDirectMessageSavedValue->value(
 	) | rpl::map([](int starsPerMessage) {
 		return (starsPerMessage < 0)
-			? tr::lng_manage_monoforum_off(Ui::Text::WithEntities)
+			? tr::lng_manage_monoforum_off(tr::marked)
 			: !starsPerMessage
-			? tr::lng_manage_monoforum_free(Ui::Text::WithEntities)
+			? tr::lng_manage_monoforum_free(tr::marked)
 			: rpl::single(Ui::Text::IconEmoji(
 				&st::starIconEmojiColored
 			).append(' ').append(
@@ -1167,7 +1167,7 @@ void Controller::fillForumButton() {
 						tr::now,
 						lt_count,
 						EnableForumMinMembers(_peer),
-						Ui::Text::RichLangValue));
+						tr::rich));
 			}
 		} else {
 			_navigation->uiShow()->show(Box(
@@ -1245,12 +1245,12 @@ void Controller::fillAutoTranslateButton() {
 		.data = Ui::AskBoostAutotranslate{ .requiredLevel = requiredLevel },
 	};
 
-	state->isLocked.value() | rpl::start_with_next([=](bool locked) {
+	state->isLocked.value() | rpl::on_next([=](bool locked) {
 		autotranslate->setToggleLocked(locked);
 	}, autotranslate->lifetime());
 
 	autotranslate->toggledChanges(
-	) | rpl::start_with_next([=](bool value) {
+	) | rpl::on_next([=](bool value) {
 		if (!state->isLocked.current()) {
 			_autotranslateSavedValue = value;
 		} else if (value) {
@@ -1272,7 +1272,7 @@ void Controller::fillAutoTranslateButton() {
 	}, autotranslate->lifetime());
 
 	autotranslate->toggledValue(
-	) | rpl::start_with_next([=](bool toggled) {
+	) | rpl::on_next([=](bool toggled) {
 		_autotranslateSavedValue = toggled;
 	}, _controls.buttonsLayout->lifetime());
 }
@@ -1309,12 +1309,12 @@ void Controller::fillSignaturesButton() {
 	profiles->entity()->toggleOn(rpl::single(
 		channel->addsSignature() && channel->signatureProfiles()
 	))->toggledValue(
-	) | rpl::start_with_next([=](bool toggled) {
+	) | rpl::on_next([=](bool toggled) {
 		_signatureProfilesSavedValue = toggled;
 	}, profiles->entity()->lifetime());
 
 	signs->toggledValue(
-	) | rpl::start_with_next([=](bool toggled) {
+	) | rpl::on_next([=](bool toggled) {
 		_signaturesSavedValue = toggled;
 		if (!toggled) {
 			_signatureProfilesSavedValue = false;
@@ -1326,8 +1326,8 @@ void Controller::fillSignaturesButton() {
 		_controls.buttonsLayout,
 		rpl::conditional(
 			signs->toggledValue(),
-			tr::lng_edit_sign_profiles_about(Ui::Text::WithEntities),
-			tr::lng_edit_sign_messages_about(Ui::Text::WithEntities)));
+			tr::lng_edit_sign_profiles_about(tr::marked),
+			tr::lng_edit_sign_messages_about(tr::marked)));
 	Ui::AddSkip(_controls.buttonsLayout);
 }
 
@@ -1415,11 +1415,11 @@ void Controller::fillManageSection() {
 				container,
 				tr::lng_manage_peer_bot_about(
 					lt_bot,
-					rpl::single(Ui::Text::Link(
+					rpl::single(tr::link(
 						'@' + kBotManagerUsername.utf16(),
 						_peer->session().createInternalLinkFull(
 							kBotManagerUsername.utf16()))),
-					Ui::Text::RichLangValue),
+					tr::rich),
 				st::boxDividerLabel),
 			st::defaultBoxDividerLabelPadding));
 		fillBotVerifyAccounts();
@@ -1732,7 +1732,7 @@ void Controller::editReactions() {
 	}
 	_controls.levelRequested = true;
 	_api.request(MTPpremium_GetBoostsStatus(
-		_peer->input
+		_peer->input()
 	)).done([=](const MTPpremium_BoostsStatus &result) {
 		_controls.levelRequested = false;
 		if (const auto channel = _peer->asChannel()) {
@@ -1796,7 +1796,7 @@ void Controller::fillPendingRequestsButton() {
 		{ &st::menuIconInvite });
 	std::move(
 		pendingRequestsCount
-	) | rpl::start_with_next([=](int count) {
+	) | rpl::on_next([=](int count) {
 		wrap->toggle(count > 0, anim::type::instant);
 	}, wrap->lifetime());
 }
@@ -1892,7 +1892,7 @@ void Controller::fillBotCurrencyButton() {
 		const auto currencyLoad
 			= button->lifetime().make_state<Api::EarnStatistics>(_peer);
 		currencyLoad->request(
-		) | rpl::start_with_error_done([=](const QString &error) {
+		) | rpl::on_error_done([=](const QString &error) {
 		}, [=] {
 			const auto balance = currencyLoad->data().currentBalance;
 			if (balance) {
@@ -1905,13 +1905,13 @@ void Controller::fillBotCurrencyButton() {
 		const auto icon = Ui::CreateChild<Ui::RpWidget>(button);
 		icon->resize(st::menuIconLinks.size());
 		const auto image = Ui::Earn::MenuIconCurrency(icon->size());
-		icon->paintRequest() | rpl::start_with_next([=] {
+		icon->paintRequest() | rpl::on_next([=] {
 			auto p = QPainter(icon);
 			p.drawImage(0, 0, image);
 		}, icon->lifetime());
 
 		button->sizeValue(
-		) | rpl::start_with_next([=](const QSize &size) {
+		) | rpl::on_next([=](const QSize &size) {
 			icon->moveToLeft(
 				button->st().iconLeft,
 				(size.height() - icon->height()) / 2);
@@ -1961,13 +1961,13 @@ void Controller::fillBotCreditsButton() {
 		const auto icon = Ui::CreateChild<Ui::RpWidget>(button);
 		const auto image = Ui::Earn::MenuIconCredits();
 		icon->resize(image.size() / style::DevicePixelRatio());
-		icon->paintRequest() | rpl::start_with_next([=] {
+		icon->paintRequest() | rpl::on_next([=] {
 			auto p = QPainter(icon);
 			p.drawImage(0, 0, image);
 		}, icon->lifetime());
 
 		button->sizeValue(
-		) | rpl::start_with_next([=](const QSize &size) {
+		) | rpl::on_next([=](const QSize &size) {
 			icon->moveToLeft(
 				button->st().iconLeft,
 				(size.height() - icon->height()) / 2);
@@ -2298,7 +2298,7 @@ void Controller::saveUsernamesOrder() {
 	}
 	if (_savingData.usernamesOrder->empty()) {
 		_api.request(MTPchannels_DeactivateAllUsernames(
-			channel->inputChannel
+			channel->inputChannel()
 		)).done([=] {
 			channel->setUsernames(channel->editableUsername().isEmpty()
 				? Data::Usernames()
@@ -2308,12 +2308,15 @@ void Controller::saveUsernamesOrder() {
 			continueSave();
 		}).send();
 	} else {
+		const auto weakContinue = crl::guard(this, [=] {
+			continueSave();
+		});
 		const auto lifetime = std::make_shared<rpl::lifetime>();
 		const auto newUsernames = (*_savingData.usernamesOrder);
 		_peer->session().api().usernames().reorder(
 			_peer,
 			newUsernames
-		) | rpl::start_with_done([=] {
+		) | rpl::on_done([=] {
 			channel->setUsernames(ranges::views::all(
 				newUsernames
 			) | ranges::views::transform([&](QString username) {
@@ -2325,7 +2328,7 @@ void Controller::saveUsernamesOrder() {
 					.editable = editable,
 				};
 			}) | ranges::to_vector);
-			continueSave();
+			weakContinue();
 			lifetime->destroy();
 		}, *lifetime);
 	}
@@ -2352,7 +2355,7 @@ void Controller::saveUsername() {
 
 	const auto newUsername = (*_savingData.username);
 	_api.request(MTPchannels_UpdateUsername(
-		channel->inputChannel,
+		channel->inputChannel(),
 		MTP_string(newUsername)
 	)).done([=] {
 		channel->setName(
@@ -2404,11 +2407,11 @@ void Controller::saveDiscussionLink() {
 	}
 
 	const auto input = *_savingData.discussionLink
-		? (*_savingData.discussionLink)->inputChannel
+		? (*_savingData.discussionLink)->inputChannel()
 		: MTP_inputChannelEmpty();
 	_api.request(MTPchannels_SetDiscussionGroup(
-		(channel->isBroadcast() ? channel->inputChannel : input),
-		(channel->isBroadcast() ? input : channel->inputChannel)
+		(channel->isBroadcast() ? channel->inputChannel() : input),
+		(channel->isBroadcast() ? input : channel->inputChannel())
 	)).done([=] {
 		channel->setDiscussionLink(*_savingData.discussionLink);
 		continueSave();
@@ -2473,14 +2476,14 @@ void Controller::saveTitle() {
 
 	if (const auto channel = _peer->asChannel()) {
 		_api.request(MTPchannels_EditTitle(
-			channel->inputChannel,
+			channel->inputChannel(),
 			MTP_string(*_savingData.title)
 		)).done(std::move(onDone)
 		).fail(std::move(onFail)
 		).send();
 	} else if (const auto chat = _peer->asChat()) {
 		_api.request(MTPmessages_EditChatTitle(
-			chat->inputChat,
+			chat->inputChat(),
 			MTP_string(*_savingData.title)
 		)).done(std::move(onDone)
 		).fail(std::move(onFail)
@@ -2488,7 +2491,7 @@ void Controller::saveTitle() {
 	} else if (_isBot) {
 		_api.request(MTPbots_GetBotInfo(
 			MTP_flags(MTPbots_GetBotInfo::Flag::f_bot),
-			_peer->asUser()->inputUser,
+			_peer->asUser()->inputUser(),
 			MTPstring() // Lang code.
 		)).done([=](const MTPbots_BotInfo &result) {
 			const auto was = qs(result.data().vname());
@@ -2499,7 +2502,7 @@ void Controller::saveTitle() {
 			using Flag = MTPbots_SetBotInfo::Flag;
 			_api.request(MTPbots_SetBotInfo(
 				MTP_flags(Flag::f_bot | Flag::f_name),
-				_peer->asUser()->inputUser,
+				_peer->asUser()->inputUser(),
 				MTPstring(), // Lang code.
 				MTP_string(now), // Name.
 				MTPstring(), // About.
@@ -2527,7 +2530,7 @@ void Controller::saveDescription() {
 	if (_isBot) {
 		_api.request(MTPbots_GetBotInfo(
 			MTP_flags(MTPbots_GetBotInfo::Flag::f_bot),
-			_peer->asUser()->inputUser,
+			_peer->asUser()->inputUser(),
 			MTPstring() // Lang code.
 		)).done([=](const MTPbots_BotInfo &result) {
 			const auto was = qs(result.data().vabout());
@@ -2538,7 +2541,7 @@ void Controller::saveDescription() {
 			using Flag = MTPbots_SetBotInfo::Flag;
 			_api.request(MTPbots_SetBotInfo(
 				MTP_flags(Flag::f_bot | Flag::f_about),
-				_peer->asUser()->inputUser,
+				_peer->asUser()->inputUser(),
 				MTPstring(), // Lang code.
 				MTPstring(), // Name.
 				MTP_string(now), // About.
@@ -2555,7 +2558,7 @@ void Controller::saveDescription() {
 		return;
 	}
 	_api.request(MTPmessages_EditChatAbout(
-		_peer->input,
+		_peer->input(),
 		MTP_string(*_savingData.description)
 	)).done([=] {
 		successCallback();
@@ -2631,7 +2634,7 @@ void Controller::togglePreHistoryHidden(
 		done();
 	};
 	_api.request(MTPchannels_TogglePreHistoryHidden(
-		channel->inputChannel,
+		channel->inputChannel(),
 		MTP_bool(hidden)
 	)).done([=](const MTPUpdates &result) {
 		channel->session().api().applyUpdates(result);
@@ -2669,7 +2672,7 @@ void Controller::saveForum() {
 		return;
 	}
 	_api.request(MTPchannels_ToggleForum(
-		channel->inputChannel,
+		channel->inputChannel(),
 		MTP_bool(*_savingData.forum),
 		MTP_bool(*_savingData.forum && *_savingData.forumTabs)
 	)).done([=](const MTPUpdates &result) {
@@ -2696,7 +2699,7 @@ void Controller::saveAutotranslate() {
 		return continueSave();
 	}
 	_api.request(MTPchannels_ToggleAutotranslation(
-		channel->inputChannel,
+		channel->inputChannel(),
 		MTP_bool(*_savingData.autotranslate)
 	)).done([=](const MTPUpdates &result) {
 		channel->session().api().applyUpdates(result);
@@ -2732,7 +2735,7 @@ void Controller::saveSignatures() {
 			| (*_savingData.signatureProfiles
 				? Flag::f_profiles_enabled
 				: Flag())),
-		channel->inputChannel
+		channel->inputChannel()
 	)).done([=](const MTPUpdates &result) {
 		channel->session().api().applyUpdates(result);
 		continueSave();
@@ -2752,7 +2755,7 @@ void Controller::saveForwards() {
 		return continueSave();
 	}
 	_api.request(MTPmessages_ToggleNoForwards(
-		_peer->input,
+		_peer->input(),
 		MTP_bool(*_savingData.noForwards)
 	)).done([=](const MTPUpdates &result) {
 		_peer->session().api().applyUpdates(result);
@@ -2775,7 +2778,7 @@ void Controller::saveJoinToWrite() {
 		return continueSave();
 	}
 	_api.request(MTPchannels_ToggleJoinToSend(
-		_peer->asChannel()->inputChannel,
+		_peer->asChannel()->inputChannel(),
 		MTP_bool(*_savingData.joinToWrite)
 	)).done([=](const MTPUpdates &result) {
 		_peer->session().api().applyUpdates(result);
@@ -2798,7 +2801,7 @@ void Controller::saveRequestToJoin() {
 		return continueSave();
 	}
 	_api.request(MTPchannels_ToggleJoinRequest(
-		_peer->asChannel()->inputChannel,
+		_peer->asChannel()->inputChannel(),
 		MTP_bool(*_savingData.requestToJoin)
 	)).done([=](const MTPUpdates &result) {
 		_peer->session().api().applyUpdates(result);
@@ -2858,7 +2861,7 @@ void Controller::deleteChannel() {
 		session->api().deleteConversation(chat, false);
 	}
 	session->api().request(MTPchannels_DeleteChannel(
-		channel->inputChannel
+		channel->inputChannel()
 	)).done([=](const MTPUpdates &result) {
 		session->api().applyUpdates(result);
 	//}).fail([=](const MTP::Error &error) {
@@ -2908,7 +2911,7 @@ void EditPeerInfoBox::prepare() {
 		this,
 		_peer);
 	_focusRequests.events(
-	) | rpl::start_with_next(
+	) | rpl::on_next(
 		[=] { controller->setFocus(); },
 		lifetime());
 	auto content = controller->createContent();
@@ -2928,7 +2931,7 @@ object_ptr<Ui::SettingsButton> EditPeerInfoBox::CreateButton(
 	return CreateButton(
 		parent,
 		std::move(text),
-		std::move(count) | Ui::Text::ToWithEntities(),
+		std::move(count) | rpl::map(tr::marked),
 		std::move(callback),
 		st,
 		std::move(descriptor));
@@ -2972,7 +2975,7 @@ object_ptr<Ui::SettingsButton> EditPeerInfoBox::CreateButton(
 		rpl::duplicate(text),
 		std::move(labelText),
 		button->widthValue()
-	) | rpl::start_with_next([&st, label](
+	) | rpl::on_next([&st, label](
 			const QString &text,
 			const TextWithEntities &labelText,
 			int width) {
@@ -2994,7 +2997,7 @@ object_ptr<Ui::SettingsButton> EditPeerInfoBox::CreateButton(
 			std::move(text),
 			label->widthValue(),
 			button->widthValue()
-		) | rpl::start_with_next([=](
+		) | rpl::on_next([=](
 				const QString &text,
 				int labelWidth,
 				int width) {

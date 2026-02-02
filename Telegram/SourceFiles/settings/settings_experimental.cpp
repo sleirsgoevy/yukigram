@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "settings/settings_experimental.h"
 
+#include "data/components/passkeys.h"
+#include "main/main_session.h"
 #include "ui/boxes/confirm_box.h"
 #include "ui/wrap/vertical_layout.h"
 #include "ui/wrap/slide_wrap.h"
@@ -16,8 +18,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/gl/gl_detection.h"
 #include "ui/chat/chat_style_radius.h"
 #include "base/options.h"
+#include "boxes/moderate_messages_box.h"
 #include "core/application.h"
 #include "core/launcher.h"
+#include "core/sandbox.h"
 #include "chat_helpers/tabbed_panel.h"
 #include "dialogs/dialogs_widget.h"
 #include "dialogs/dialogs_inner_widget.h"
@@ -35,6 +39,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "window/notifications_manager.h"
 #include "storage/localimageloader.h"
 #include "data/data_document_resolver.h"
+#include "info/info_flexible_scroll.h"
 #include "styles/style_settings.h"
 #include "styles/style_layers.h"
 #include "ui/chat/chat_style.h"
@@ -78,7 +83,7 @@ void AddOption(
 		});
 	}
 	button->toggledChanges(
-	) | rpl::start_with_next([=, &option](bool toggled) {
+	) | rpl::on_next([=, &option](bool toggled) {
 		if (!option.relevant() && toggled != option.defaultValue()) {
 			toggles->fire_copy(option.defaultValue());
 			window->showToast(
@@ -163,6 +168,7 @@ void SetupExperimental(
 	addToggle(Window::Notifications::kOptionGNotification);
 	addToggle(Core::kOptionFreeType);
 	addToggle(Core::kOptionSkipUrlSchemeRegister);
+	addToggle(Core::kOptionDeadlockDetector);
 	addToggle(Data::kOptionExternalVideoPlayer);
 	addToggle(Window::kOptionNewWindowsSizeAsFirst);
 	addToggle(MTP::details::kOptionPreferIPv6);
@@ -170,6 +176,8 @@ void SetupExperimental(
 		addToggle(kOptionFastButtonsMode);
 	}
 	addToggle(Window::kOptionDisableTouchbar);
+	addToggle(Info::kAlternativeScrollProcessing);
+	addToggle(kModerateCommonGroups);
 }
 
 } // namespace

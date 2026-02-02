@@ -908,6 +908,20 @@ UserpicsSlice ParseUserpicsSlice(
 	return result;
 }
 
+[[nodiscard]] ActionStarGift ParseStarGift(const MTPStarGift &gift) {
+	return gift.match([&](const MTPDstarGift &gift) {
+		return ActionStarGift{
+			.giftId = uint64(gift.vid().v),
+			.stars = int64(gift.vstars().v),
+			.limited = gift.is_limited(),
+		};
+	}, [&](const MTPDstarGiftUnique &gift) {
+		return ActionStarGift{
+			.giftId = uint64(gift.vid().v),
+		};
+	});
+}
+
 File &Story::file() {
 	return media.file();
 }
@@ -1439,6 +1453,8 @@ Media ParseMedia(
 		result.content = ParseGiveaway(data);
 	}, [&](const MTPDmessageMediaPaidMedia &data) {
 		result.content = ParsePaidMedia(context, data, folder, date);
+	}, [](const MTPDmessageMediaVideoStream &data) {
+		// Live stories.
 	}, [](const MTPDmessageMediaEmpty &data) {});
 	return result;
 }
@@ -1651,7 +1667,7 @@ ServiceAction ParseServiceAction(
 		content.cost = Ui::FillAmountAndCurrency(
 			data.vamount().v,
 			qs(data.vcurrency())).toUtf8();
-		content.months = data.vmonths().v;
+		content.days = data.vdays().v;
 		result.content = content;
 	}, [&](const MTPDmessageActionTopicCreate &data) {
 		auto content = ActionTopicCreate();
@@ -1694,7 +1710,7 @@ ServiceAction ParseServiceAction(
 			: PeerId();
 		content.viaGiveaway = data.is_via_giveaway();
 		content.unclaimed = data.is_unclaimed();
-		content.months = data.vmonths().v;
+		content.days = data.vdays().v;
 		content.code = data.vslug().v;
 		result.content = content;
 	}, [&](const MTPDmessageActionGiveawayLaunch &data) {
@@ -1745,41 +1761,16 @@ ServiceAction ParseServiceAction(
 			.isUnclaimed = data.is_unclaimed(),
 		};
 	}, [&](const MTPDmessageActionStarGift &data) {
-		data.vgift().match([&](const MTPDstarGift &gift) {
-			result.content = ActionStarGift{
-				.giftId = uint64(gift.vid().v),
-				.stars = int64(gift.vstars().v),
-				.text = (data.vmessage()
-					? ParseText(
-						data.vmessage()->data().vtext(),
-						data.vmessage()->data().ventities().v)
-					: std::vector<TextPart>()),
-				.anonymous = data.is_name_hidden(),
-				.limited = gift.is_limited(),
-			};
-		}, [&](const MTPDstarGiftUnique &gift) {
-			result.content = ActionStarGift{
-				.giftId = uint64(gift.vid().v),
-				.text = (data.vmessage()
-					? ParseText(
-						data.vmessage()->data().vtext(),
-						data.vmessage()->data().ventities().v)
-					: std::vector<TextPart>()),
-				.anonymous = data.is_name_hidden(),
-			};
-		});
+		auto content = ParseStarGift(data.vgift());
+		content.text = (data.vmessage()
+			? ParseText(
+				data.vmessage()->data().vtext(),
+				data.vmessage()->data().ventities().v)
+			: std::vector<TextPart>());
+		content.anonymous = data.is_name_hidden();
+		result.content = content;
 	}, [&](const MTPDmessageActionStarGiftUnique &data) {
-		data.vgift().match([&](const MTPDstarGift &gift) {
-			result.content = ActionStarGift{
-				.giftId = uint64(gift.vid().v),
-				.stars = int64(gift.vstars().v),
-				.limited = gift.is_limited(),
-			};
-		}, [&](const MTPDstarGiftUnique &gift) {
-			result.content = ActionStarGift{
-				.giftId = uint64(gift.vid().v),
-			};
-		});
+		result.content = ParseStarGift(data.vgift());
 	}, [&](const MTPDmessageActionPaidMessagesRefunded &data) {
 		result.content = ActionPaidMessagesRefunded{
 			.messages = data.vcount().v,
@@ -1844,6 +1835,21 @@ ServiceAction ParseServiceAction(
 			fields.vday().v,
 			fields.vmonth().v,
 			fields.vyear().value_or_empty());
+		result.content = content;
+	}, [&](const MTPDmessageActionStarGiftPurchaseOffer &data) {
+		auto content = ParseStarGift(data.vgift());
+		content.offer = true;
+		content.offerPrice = CreditsAmountFromTL(data.vprice());
+		content.offerExpireAt = data.vexpires_at().v;
+		content.offerAccepted = data.is_accepted();
+		content.offerDeclined = data.is_declined();
+		result.content = content;
+	}, [&](const MTPDmessageActionStarGiftPurchaseOfferDeclined &data) {
+		auto content = ParseStarGift(data.vgift());
+		content.offer = true;
+		content.offerDeclined = true;
+		content.offerExpired = data.is_expired();
+		content.offerPrice = CreditsAmountFromTL(data.vprice());
 		result.content = content;
 	}, [](const MTPDmessageActionEmpty &data) {});
 	return result;
