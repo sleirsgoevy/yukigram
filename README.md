@@ -1,5 +1,9 @@
 ﻿# Yukigram: [64Gram](https://github.com/TDesktop-x64/tdesktop) fork – Based on [Telegram Desktop](https://github.com/telegramdesktop/tdesktop)
 
+Install it from [our binary caches](https://yukigram.github.io/yukigram), build it yourself from [PKGBUILD (semi-abandoned)](https://github.com/yukigram/yukigram-pkgbuild), or use nix (with or without flakes).
+
+---
+
 The source code is published under GPLv3 with OpenSSL exception, the license is available [here][license].
 
 [![Preview of 64Gram][preview_image]][preview_image_url]

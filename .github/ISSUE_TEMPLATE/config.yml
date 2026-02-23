@@ -1,11 +1,11 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
   - name: Platform-wide issue
     url: https://bugs.telegram.org
     about: Any bug report or feature request affecting more than only Telegram Desktop.
-  - name: Issue of other client
+  - name: Issues that can be reproduced in Telegram Desktop
+    url: https://github.com/telegramdesktop/tdesktop/issues
+    about: Issues that were introduced by 64Gram
+  - name: Issue of other official clients
     url: https://bugs.telegram.org
     about: Any bug report or feature request not about Telegram Desktop.
-  - name: Question
-    url: https://t.me/TelegramDesktopTalk
-    about: Ask a question.
