@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Based on https://openclipart.org/detail/248175/paperplane -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+    <circle cx="8" cy="8" r="7" fill="#111" />
+    <path d="M2,8.625l2.5,0.9375L5.75,13l1.788-2.3875L10.75,11.75l1.25-8.75L2,8.625zM6.481,10.15l-0.5725,1.553l-0.6787-1.9487l5.251-4.769L6.481,10.15z" fill="#eee" />
+</svg>
